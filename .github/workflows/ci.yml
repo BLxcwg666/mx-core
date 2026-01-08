@@ -83,10 +83,9 @@ jobs:
             blxcwg666/mx-server
           tags: |
             type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
             type=sha
+            type=raw,value=latest
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Copy .env
@@ -98,7 +97,7 @@ jobs:
           context: .
           load: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }},blxcwg666/mx-server:latest
+          labels: ${{ steps.meta.outputs.labels }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Test
