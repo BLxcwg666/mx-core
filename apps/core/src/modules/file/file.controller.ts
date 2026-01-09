@@ -109,6 +109,14 @@ export class FileController {
           storage: 's3',
         }
       }
+
+      await this.service.writeFileFromBuffer(type, filename, buffer)
+
+      return {
+        url: await this.service.resolveFileUrl(type, filename),
+        name: filename,
+        storage: 'local',
+      }
     }
 
     await this.service.writeFile(type, filename, file.file)

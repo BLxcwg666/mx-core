@@ -154,6 +154,19 @@ export class FileService {
     })
   }
 
+  async writeFileFromBuffer(
+    type: FileType,
+    name: string,
+    buffer: Buffer,
+  ): Promise<void> {
+    const filePath = this.resolveFilePath(type, name)
+    if (await this.checkIsExist(filePath)) {
+      throw new BadRequestException('文件已存在')
+    }
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.writeFile(filePath, buffer)
+  }
+
   async deleteFile(type: FileType, name: string) {
     try {
       const path = this.resolveFilePath(type, name)
