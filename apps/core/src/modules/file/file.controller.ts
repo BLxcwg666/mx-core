@@ -132,9 +132,10 @@ export class FileController {
 
   @Delete('/:type/:name')
   @Auth()
-  async delete(@Param() params: FileQueryDto) {
+  async delete(@Param() params: FileQueryDto, @Query() query: FileQueryDto) {
     const { type, name } = params
-    await this.service.deleteFile(type, name)
+    const { storage } = query
+    await this.service.deleteFile(type, name, storage)
   }
 
   @Auth()

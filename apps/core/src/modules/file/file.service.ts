@@ -177,15 +177,58 @@ export class FileService {
     await fs.writeFile(filePath, buffer)
   }
 
-  async deleteFile(type: FileType, name: string) {
+  async deleteFile(type: FileType, name: string, storage?: 'local' | 's3') {
     try {
-      const path = this.resolveFilePath(type, name)
-      await fs.copyFile(path, resolve(STATIC_FILE_TRASH_DIR, name))
-      await fs.unlink(path)
+      if (storage === 's3') {
+        await this.deleteFileFromS3(name)
+      } else {
+        const path = this.resolveFilePath(type, name)
+        await fs.copyFile(path, resolve(STATIC_FILE_TRASH_DIR, name))
+        await fs.unlink(path)
+      }
     } catch (error) {
       this.logger.error('删除文件失败', error)
 
       throw new InternalServerErrorException(`删除文件失败，${error.message}`)
+    }
+  }
+
+  async deleteFileFromS3(filename: string): Promise<void> {
+    const { imageBedOptions, s3Options } =
+      await this.configService.waitForConfigReady()
+
+    if (!imageBedOptions?.enable) {
+      throw new InternalServerErrorException('S3 图床未启用')
+    }
+
+    const { endpoint, bucket, region, accessKeyId, secretAccessKey } =
+      s3Options || {}
+    if (!endpoint || !bucket || !region || !accessKeyId || !secretAccessKey) {
+      throw new InternalServerErrorException('S3 配置不完整')
+    }
+
+    const s3 = new S3Uploader({
+      bucket,
+      region,
+      accessKey: accessKeyId,
+      secretKey: secretAccessKey,
+      endpoint,
+    })
+
+    const pathTemplate = imageBedOptions.path || 'images/{Y}/{m}/{uuid}.{ext}'
+    const remotePath = parsePlaceholder(pathTemplate, {
+      filename,
+    })
+
+    try {
+      this.logger.log(`Deleting from S3: ${remotePath}`)
+      await s3.deleteFromS3(remotePath)
+      this.logger.log(`Successfully deleted from S3: ${remotePath}`)
+    } catch (error) {
+      this.logger.error('Failed to delete from S3', error)
+      throw new InternalServerErrorException(
+        `从 S3 删除文件失败: ${error.message}`,
+      )
     }
   }
 
