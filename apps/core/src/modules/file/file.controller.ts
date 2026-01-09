@@ -22,7 +22,12 @@ import { UploadService } from '~/processors/helper/helper.upload.service'
 import { PagerDto } from '~/shared/dto/pager.dto'
 import { FastifyReply, FastifyRequest } from 'fastify'
 import { lookup } from 'mime-types'
-import { FileQueryDto, FileUploadDto, RenameFileQueryDto } from './file.dto'
+import {
+  FileDeleteQueryDto,
+  FileQueryDto,
+  FileUploadDto,
+  RenameFileQueryDto,
+} from './file.dto'
 import { FileService } from './file.service'
 
 const { customAlphabet } = nanoid
@@ -132,7 +137,10 @@ export class FileController {
 
   @Delete('/:type/:name')
   @Auth()
-  async delete(@Param() params: FileQueryDto, @Query() query: FileQueryDto) {
+  async delete(
+    @Param() params: FileQueryDto,
+    @Query() query: FileDeleteQueryDto,
+  ) {
     const { type, name } = params
     const { storage } = query
     await this.service.deleteFile(type, name, storage)
