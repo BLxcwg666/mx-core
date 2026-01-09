@@ -25,6 +25,32 @@ export class FileService {
     this.logger = new Logger(FileService.name)
   }
 
+  async validateImageFile(filename: string, buffer: Buffer): Promise<void> {
+    const { imageBedOptions } = await this.configService.waitForConfigReady()
+
+    const ext = path.extname(filename).slice(1).toLowerCase()
+    const allowedFormats = imageBedOptions?.allowedFormats
+      ?.split(',')
+      .map((f) => f.trim().toLowerCase())
+    if (
+      allowedFormats &&
+      allowedFormats.length > 0 &&
+      !allowedFormats.includes(ext)
+    ) {
+      throw new BadRequestException(
+        `不支持的图片格式: ${ext}，允许的格式: ${imageBedOptions.allowedFormats}`,
+      )
+    }
+
+    const maxSizeMB = imageBedOptions?.maxSizeMB || 10
+    const maxSizeBytes = maxSizeMB * 1024 * 1024
+    if (buffer.length > maxSizeBytes) {
+      throw new BadRequestException(
+        `图片文件过大: ${(buffer.length / 1024 / 1024).toFixed(2)}MB，最大允许: ${maxSizeMB}MB`,
+      )
+    }
+  }
+
   async uploadImageToS3(
     filename: string,
     buffer: Buffer,
@@ -44,22 +70,6 @@ export class FileService {
     }
 
     const ext = path.extname(filename).slice(1).toLowerCase()
-    const allowedFormats = imageBedOptions.allowedFormats
-      ?.split(',')
-      .map((f) => f.trim().toLowerCase())
-    if (allowedFormats && !allowedFormats.includes(ext)) {
-      throw new BadRequestException(
-        `不支持的图片格式: ${ext}，允许的格式: ${imageBedOptions.allowedFormats}`,
-      )
-    }
-
-    const maxSizeMB = imageBedOptions.maxSizeMB || 10
-    const maxSizeBytes = maxSizeMB * 1024 * 1024
-    if (buffer.length > maxSizeBytes) {
-      throw new BadRequestException(
-        `图片文件过大: ${(buffer.length / 1024 / 1024).toFixed(2)}MB，最大允许: ${maxSizeMB}MB`,
-      )
-    }
 
     const s3 = new S3Uploader({
       bucket,

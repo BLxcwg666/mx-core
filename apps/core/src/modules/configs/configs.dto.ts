@@ -76,9 +76,15 @@ export class UrlDto {
 }
 
 class MailOption {
-  @IsInt()
-  @Transform(({ value: val }) => Number.parseInt(val))
   @IsOptional()
+  @Transform(
+    ({ value }) => {
+      if (value === undefined || value === null) return undefined
+      return typeof value === 'number' ? value : Number.parseInt(value, 10)
+    },
+    { toClassOnly: true },
+  )
+  @IsInt()
   @JSONSchemaNumberField('SMTP 端口', halfFieldOption)
   port: number
   @IsUrl({ require_protocol: false })
@@ -150,11 +156,17 @@ export class CommentOptionsDto {
   })
   aiReviewType: 'binary' | 'score'
 
+  @IsOptional()
+  @Transform(
+    ({ value }) => {
+      if (value === undefined || value === null) return undefined
+      return typeof value === 'number' ? value : Number.parseInt(value, 10)
+    },
+    { toClassOnly: true },
+  )
   @IsInt()
-  @Transform(({ value: val }) => Number.parseInt(val))
   @Min(1)
   @Max(10)
-  @IsOptional()
   @JSONSchemaNumberField('AI 审核阈值', {
     description: '分数大于多少时会被归类为垃圾评论，范围为 1-10, 默认为 5',
   })
@@ -284,11 +296,17 @@ export class ImageBedOptionsDto {
   })
   allowedFormats?: string
 
+  @IsOptional()
+  @Transform(
+    ({ value }) => {
+      if (value === undefined || value === null) return undefined
+      return typeof value === 'number' ? value : Number.parseInt(value, 10)
+    },
+    { toClassOnly: true },
+  )
   @IsInt()
-  @Transform(({ value: val }) => Number.parseInt(val))
   @Min(1)
   @Max(100)
-  @IsOptional()
   @JSONSchemaNumberField('最大文件大小（MB）', {
     description: '单个图片文件的最大大小限制，单位：MB',
   })

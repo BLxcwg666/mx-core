@@ -100,6 +100,8 @@ export class FileController {
 
     if (isImage && type === 'photo') {
       const buffer = await this.uploadService.getFileBuffer(file.file)
+
+      await this.service.validateImageFile(filename, buffer)
       const s3Url = await this.service.uploadImageToS3(filename, buffer)
 
       if (s3Url) {
