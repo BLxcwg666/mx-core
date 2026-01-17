@@ -7,6 +7,8 @@ services:
       - NODE_ENV=production
       - DB_HOST=mongo
       - REDIS_HOST=redis
+      - MEILI_HOST=meilisearch
+      - MEILI_MASTER_KEY=YOUR_SUPER_SECURED_MEILI_MASTER_KEY
       - ALLOWED_ORIGINS=localhost
       - JWT_SECRET=YOUR_SUPER_SECURED_JWT_SECRET_STRING
     volumes:
@@ -16,6 +18,7 @@ services:
     depends_on:
       - mongo
       - redis
+      - meilisearch
     networks:
       - mx-space
     restart: unless-stopped
@@ -46,6 +49,25 @@ services:
       interval: 30s
       retries: 5
       timeout: 3s
+    networks:
+      - mx-space
+    restart: unless-stopped
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: meilisearch
+    environment:
+      - MEILI_ENV=production
+      - MEILI_MASTER_KEY=YOUR_SUPER_SECURED_MEILI_MASTER_KEY
+      - MEILI_NO_ANALYTICS=true
+    volumes:
+      - ./data/meili:/meili_data
+    healthcheck:
+      test: [CMD, curl, -f, 'http://127.0.0.1:7700/health']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
     networks:
       - mx-space
     restart: unless-stopped

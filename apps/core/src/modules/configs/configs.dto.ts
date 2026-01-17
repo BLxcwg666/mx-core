@@ -378,6 +378,32 @@ export class AlgoliaSearchOptionsDto {
   maxTruncateSize?: number
 }
 
+@JSONSchema({ title: 'MeiliSearch 设置' })
+export class MeiliSearchOptionsDto {
+  @IsBoolean()
+  @IsOptional()
+  @JSONSchemaToggleField('启用 MeiliSearch', {
+    description:
+      '本地全文搜索引擎，需要在 docker-compose 中启用 meilisearch 服务',
+  })
+  enable: boolean
+
+  @IsString()
+  @IsOptional()
+  @JSONSchemaPlainField('索引名称', {
+    description: '搜索索引名称，默认为 mx-space',
+  })
+  indexName?: string
+
+  @IsInt()
+  @Min(60)
+  @IsOptional()
+  @JSONSchemaNumberField('搜索缓存时间（秒）', {
+    description: '搜索结果缓存时间，默认 300 秒',
+  })
+  searchCacheTTL?: number
+}
+
 @JSONSchema({ title: '后台附加设置' })
 export class AdminExtraDto {
   @IsBoolean()

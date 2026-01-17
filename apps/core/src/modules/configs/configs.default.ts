@@ -76,6 +76,11 @@ export const generateDefaultConfig: () => IConfig = () => ({
     indexName: '',
     maxTruncateSize: 10000,
   },
+  meiliSearchOptions: {
+    enable: true,
+    indexName: 'mx-space',
+    searchCacheTTL: 300,
+  },
   adminExtra: {
     enableAdminProxy: true,
 

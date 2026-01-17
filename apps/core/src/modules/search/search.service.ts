@@ -14,11 +14,16 @@ import { BusinessEvents } from '~/constants/business-event.constant'
 import { EventBusEvents } from '~/constants/event-bus.constant'
 import type { SearchDto } from '~/modules/search/search.dto'
 import { DatabaseService } from '~/processors/database/database.service'
+import {
+  MeiliSearchService,
+  SearchableDocument,
+} from '~/processors/meili/meili.service'
+import { RedisService } from '~/processors/redis/redis.service'
 import type { Pagination } from '~/shared/interface/paginator.interface'
 import { transformDataToPaginate } from '~/transformers/paginate.transformer'
+import { md5 } from '~/utils/tool.util'
 import algoliasearch from 'algoliasearch'
 import type { SearchIndex } from 'algoliasearch'
-import { omit } from 'lodash'
 import removeMdCodeblock from 'remove-md-codeblock'
 import { ConfigsService } from '../configs/configs.service'
 import { NoteModel } from '../note/note.model'
@@ -26,6 +31,8 @@ import { NoteService } from '../note/note.service'
 import { PageService } from '../page/page.service'
 import { PostModel } from '../post/post.model'
 import { PostService } from '../post/post.service'
+
+const SEARCH_CACHE_PREFIX = 'search:'
 
 @Injectable()
 export class SearchService {
@@ -42,6 +49,8 @@ export class SearchService {
 
     private readonly configs: ConfigsService,
     private readonly databaseService: DatabaseService,
+    private readonly meiliSearchService: MeiliSearchService,
+    private readonly redisService: RedisService,
   ) {}
 
   async searchNote(searchOption: SearchDto, showHidden: boolean) {
@@ -57,7 +66,13 @@ export class SearchService {
         {
           $or: [{ title: { $in: keywordArr } }, { text: { $in: keywordArr } }],
           $and: [
-            { password: { $not: null } },
+            {
+              $or: [
+                { password: undefined },
+                { password: null },
+                { password: { $exists: false } },
+              ],
+            },
             { isPublished: { $in: showHidden ? [false, true] : [true] } },
             {
               $or: [
@@ -94,6 +109,305 @@ export class SearchService {
     )
   }
 
+  // MeiliSearch
+  private async getMeiliSearchIndexName(): Promise<string> {
+    const { meiliSearchOptions } = await this.configs.waitForConfigReady()
+    return meiliSearchOptions.indexName || 'mx-space'
+  }
+
+  async searchWithMeili(searchOption: SearchDto): Promise<
+    Pagination<any> & {
+      raw?: any
+    }
+  > {
+    const { meiliSearchOptions } = await this.configs.waitForConfigReady()
+
+    if (!meiliSearchOptions.enable || !this.meiliSearchService.isAvailable()) {
+      throw new BadRequestException('MeiliSearch not enabled or not available')
+    }
+
+    const { keyword, page, size } = searchOption
+    const indexName = await this.getMeiliSearchIndexName()
+    const cacheKey = `${SEARCH_CACHE_PREFIX}${md5(`${keyword}:${page}:${size}`)}`
+    const cacheTTL = meiliSearchOptions.searchCacheTTL || 300
+    const redis = this.redisService.getClient()
+    const cachedResult = await redis.get(cacheKey)
+    if (cachedResult) {
+      this.logger.debug(`Search cache hit: ${keyword}`)
+      return JSON.parse(cachedResult)
+    }
+
+    const searchResult = await this.meiliSearchService.search(
+      indexName,
+      keyword,
+      {
+        limit: size,
+        offset: (page - 1) * size,
+      },
+    )
+
+    if (!searchResult) {
+      return {
+        data: [],
+        pagination: {
+          currentPage: page,
+          total: 0,
+          hasNextPage: false,
+          hasPrevPage: page > 1,
+          size,
+          totalPage: 0,
+        },
+      }
+    }
+
+    const data: any[] = []
+    const tasks = searchResult.hits.map((hit) => {
+      const { type, objectID } = hit
+      const model = this.databaseService.getModelByRefType(type as 'post')
+      if (!model) return Promise.resolve()
+
+      return model
+        .findById(objectID)
+        .select('_id title created modified categoryId slug nid')
+        .lean({ getters: true, autopopulate: true })
+        .then((doc) => {
+          if (doc) {
+            Reflect.set(doc, 'type', type)
+            const formatted = searchResult.hits.find(
+              (h) => h.objectID === objectID,
+            )
+            if (formatted?._formatted) {
+              Reflect.set(doc, '_highlight', {
+                title: formatted._formatted.title,
+                text: formatted._formatted.text,
+              })
+            }
+            data.push(doc)
+          }
+        })
+    })
+
+    await Promise.all(tasks)
+
+    const totalHits = searchResult.estimatedTotalHits ?? 0
+    const totalPages = Math.ceil(totalHits / size)
+    const result = {
+      data,
+      raw: searchResult,
+      pagination: {
+        currentPage: page,
+        total: totalHits,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+        size,
+        totalPage: totalPages,
+      },
+    }
+
+    await redis.setex(cacheKey, cacheTTL, JSON.stringify(result))
+
+    return result
+  }
+
+  async buildMeiliSearchIndexData(): Promise<SearchableDocument[]> {
+    const combineDocuments = await Promise.all([
+      this.postService.model
+        .find()
+        .select('title text categoryId category slug created modified')
+        .populate('category', 'name slug')
+        .lean()
+        .then((list) => {
+          return list.map((data) => ({
+            id: String(data._id),
+            objectID: String(data._id),
+            title: data.title,
+            text: removeMdCodeblock(data.text),
+            type: 'post' as const,
+            slug: data.slug,
+            categoryId: data.categoryId?.toString(),
+            category: data.category as any,
+            created: data.created,
+            modified: data.modified ?? undefined,
+          }))
+        }),
+
+      this.pageService.model
+        .find({}, 'title text slug subtitle created modified')
+        .lean()
+        .then((list) => {
+          return list.map((data) => ({
+            id: String(data._id),
+            objectID: String(data._id),
+            title: data.title,
+            text: data.text,
+            type: 'page' as const,
+            slug: data.slug,
+            created: data.created,
+            modified: data.modified ?? undefined,
+          }))
+        }),
+
+      this.noteService.model
+        .find(
+          {
+            isPublished: true,
+            $or: [
+              { password: undefined },
+              { password: null },
+              { password: { $exists: false } },
+            ],
+          },
+          'title text nid created modified',
+        )
+        .lean()
+        .then((list) => {
+          return list.map((data) => ({
+            id: String(data._id),
+            objectID: String(data._id),
+            title: data.title,
+            text: data.text,
+            type: 'note' as const,
+            nid: data.nid?.toString(),
+            created: data.created,
+            modified: data.modified ?? undefined,
+          }))
+        }),
+    ])
+
+    return combineDocuments.flat()
+  }
+
+  @CronOnce(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+    name: 'pushToMeiliSearch',
+  })
+  @CronDescription('推送到 MeiliSearch')
+  @OnEvent(EventBusEvents.PushSearch)
+  async pushAllToMeiliSearch() {
+    const configs = await this.configs.waitForConfigReady()
+    if (!configs.meiliSearchOptions.enable || isDev) {
+      return
+    }
+
+    if (!this.meiliSearchService.isAvailable()) {
+      this.logger.warn('MeiliSearch not available, skip push')
+      return
+    }
+
+    const indexName = await this.getMeiliSearchIndexName()
+
+    this.logger.log('--> 开始推送到 MeiliSearch')
+
+    const documents = await this.buildMeiliSearchIndexData()
+
+    const success = await this.meiliSearchService.replaceAllDocuments(
+      indexName,
+      documents,
+    )
+
+    if (success) {
+      this.logger.log(
+        `--> 推送到 MeiliSearch 成功，共 ${documents.length} 条文档`,
+      )
+      await this.clearSearchCache()
+    } else {
+      this.logger.error('MeiliSearch 推送失败')
+    }
+  }
+
+  @OnEvent(BusinessEvents.POST_CREATE)
+  @OnEvent(BusinessEvents.POST_UPDATE)
+  async onPostCreateOrUpdate(post: PostModel) {
+    const data = await this.postService.model
+      .findById(post.id)
+      .populate('category', 'name slug')
+      .lean()
+
+    if (!data) return
+
+    await this.executeIfMeiliSearchEnabled(async (indexName) => {
+      this.logger.log(`Post created/updated, sync to MeiliSearch: ${data._id}`)
+
+      await this.meiliSearchService.updateDocument(indexName, {
+        id: String(data._id),
+        objectID: String(data._id),
+        title: data.title,
+        text: removeMdCodeblock(data.text),
+        type: 'post',
+        slug: data.slug,
+        categoryId: data.categoryId?.toString(),
+        category: data.category as any,
+        created: data.created,
+        modified: data.modified ?? undefined,
+      })
+
+      await this.clearSearchCache()
+    })
+  }
+
+  @OnEvent(BusinessEvents.NOTE_CREATE)
+  @OnEvent(BusinessEvents.NOTE_UPDATE)
+  async onNoteCreateOrUpdate(note: NoteModel) {
+    const data = await this.noteService.model.findById(note.id).lean()
+
+    if (!data) return
+
+    if (data.password || !data.isPublished) {
+      return
+    }
+
+    await this.executeIfMeiliSearchEnabled(async (indexName) => {
+      this.logger.log(`Note created/updated, sync to MeiliSearch: ${data._id}`)
+
+      await this.meiliSearchService.updateDocument(indexName, {
+        id: String(data._id),
+        objectID: String(data._id),
+        title: data.title,
+        text: data.text,
+        type: 'note',
+        nid: data.nid?.toString(),
+        created: data.created,
+        modified: data.modified ?? undefined,
+      })
+
+      await this.clearSearchCache()
+    })
+  }
+
+  @OnEvent(BusinessEvents.POST_DELETE)
+  @OnEvent(BusinessEvents.NOTE_DELETE)
+  async onDocumentDelete({ data: id }: { data: string }) {
+    await this.executeIfMeiliSearchEnabled(async (indexName) => {
+      this.logger.log(`Document deleted, remove from MeiliSearch: ${id}`)
+      await this.meiliSearchService.deleteDocument(indexName, id)
+      await this.clearSearchCache()
+    })
+  }
+
+  private async executeIfMeiliSearchEnabled(
+    fn: (indexName: string) => Promise<any>,
+  ) {
+    const configs = await this.configs.waitForConfigReady()
+    if (
+      !configs.meiliSearchOptions.enable ||
+      isDev ||
+      !this.meiliSearchService.isAvailable()
+    ) {
+      return
+    }
+    const indexName = await this.getMeiliSearchIndexName()
+    return fn(indexName)
+  }
+
+  private async clearSearchCache() {
+    const redis = this.redisService.getClient()
+    const keys = await redis.keys(`${SEARCH_CACHE_PREFIX}*`)
+    if (keys.length > 0) {
+      await Promise.all(keys.map((key) => redis.del(key)))
+      this.logger.debug(`Cleared ${keys.length} search cache entries`)
+    }
+  }
+
+  // Algolia (Legacy)
   public async getAlgoliaSearchIndex() {
     const { algoliaSearchOptions } = await this.configs.waitForConfigReady()
     if (!algoliaSearchOptions.enable) {
@@ -188,13 +502,8 @@ export class SearchService {
   }
 
   /**
-   * @description 每天凌晨推送一遍 Algolia Search
+   * @deprecated use pushAllToMeiliSearch instead
    */
-  @CronOnce(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
-    name: 'pushToAlgoliaSearch',
-  })
-  @CronDescription('推送到 Algolia Search')
-  @OnEvent(EventBusEvents.PushSearch)
   async pushAllToAlgoliaSearch() {
     const configs = await this.configs.waitForConfigReady()
     if (!configs.algoliaSearchOptions.enable || isDev) {
@@ -289,79 +598,6 @@ export class SearchService {
       .map((item) =>
         adjustObjectSizeEfficiently(item, algoliaSearchOptions.maxTruncateSize),
       )
-  }
-
-  @OnEvent(BusinessEvents.POST_CREATE)
-  @OnEvent(BusinessEvents.POST_UPDATE)
-  async onPostCreate(post: PostModel) {
-    const data = await this.postService.model.findById(post.id).lean()
-
-    if (!data) return
-
-    this.executeAlgoliaSearchOperationIfEnabled(async (index) => {
-      const { algoliaSearchOptions } = await this.configs.waitForConfigReady()
-
-      this.logger.log(
-        `detect post created or update, save to algolia, data id:${data.id}`,
-      )
-      await index.saveObject(
-        adjustObjectSizeEfficiently(
-          {
-            ...omit(data, '_id'),
-            objectID: data.id,
-            id: data.id,
-
-            type: 'post',
-          },
-          algoliaSearchOptions.maxTruncateSize,
-        ),
-        {
-          autoGenerateObjectIDIfNotExist: false,
-        },
-      )
-      this.logger.log(`save to algolia success, id: ${data.id}`)
-    })
-  }
-
-  @OnEvent(BusinessEvents.NOTE_CREATE)
-  @OnEvent(BusinessEvents.NOTE_UPDATE)
-  async onNoteCreate(note: NoteModel) {
-    const data = await this.noteService.model.findById(note.id).lean()
-
-    if (!data) return
-
-    this.executeAlgoliaSearchOperationIfEnabled(async (index) => {
-      this.logger.log(
-        `detect post created or update, save to algolia, data id:${data.id}`,
-      )
-      const { algoliaSearchOptions } = await this.configs.waitForConfigReady()
-
-      await index.saveObject(
-        adjustObjectSizeEfficiently(
-          {
-            ...omit(data, '_id'),
-            objectID: data.id,
-            id: data.id,
-            type: 'note',
-          },
-          algoliaSearchOptions.maxTruncateSize,
-        ),
-        {
-          autoGenerateObjectIDIfNotExist: false,
-        },
-      )
-      this.logger.log(`save to algolia success, id: ${data.id}`)
-    })
-  }
-
-  @OnEvent(BusinessEvents.POST_DELETE)
-  @OnEvent(BusinessEvents.NOTE_DELETE)
-  async onPostDelete({ data: id }: { data: string }) {
-    await this.executeAlgoliaSearchOperationIfEnabled(async (index) => {
-      this.logger.log(`detect data delete, save to algolia, data id: ${id}`)
-
-      await index.deleteObject(id)
-    })
   }
 
   private async executeAlgoliaSearchOperationIfEnabled(

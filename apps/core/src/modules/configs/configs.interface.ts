@@ -20,6 +20,7 @@ import {
   FriendLinkOptionsDto,
   ImageBedOptionsDto,
   MailOptionsDto,
+  MeiliSearchOptionsDto,
   OAuthDto,
   S3OptionsDto,
   SeoDto,
@@ -80,6 +81,8 @@ export abstract class IConfig {
   bingSearchOptions: Required<BingSearchOptionsDto>
   @ConfigField(() => AlgoliaSearchOptionsDto)
   algoliaSearchOptions: Required<AlgoliaSearchOptionsDto>
+  @ConfigField(() => MeiliSearchOptionsDto)
+  meiliSearchOptions: Required<MeiliSearchOptionsDto>
 
   @ConfigField(() => FeatureListDto)
   featureList: Required<FeatureListDto>

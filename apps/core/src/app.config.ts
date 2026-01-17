@@ -43,6 +43,11 @@ const commander = program
   .option('--redis_password <string>', 'redis password')
   .option('--disable_cache', 'disable redis cache')
 
+  // meilisearch
+  .option('--meili_host <string>', 'meilisearch host')
+  .option('--meili_port <number>', 'meilisearch port')
+  .option('--meili_master_key <string>', 'meilisearch master key')
+
   // jwt
   .option('--jwt_secret <string>', 'custom jwt secret')
   .option('--jwt_expire <number>', 'custom jwt expire time(d)')
@@ -157,6 +162,15 @@ export const REDIS = {
   max: 120,
   disableApiCache: isDev,
   // disableApiCache: false,
+}
+
+export const MEILISEARCH = {
+  host: argv.meili_host || 'localhost',
+  port: argv.meili_port || 7700,
+  masterKey: argv.meili_master_key || process.env.MEILI_MASTER_KEY || '',
+  get url() {
+    return `http://${this.host}:${this.port}`
+  },
 }
 
 export const HTTP_CACHE = {

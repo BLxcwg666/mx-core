@@ -252,6 +252,9 @@ importers:
       marked:
         specifier: 16.3.0
         version: 16.3.0
+      meilisearch:
+        specifier: 0.47.0
+        version: 0.47.0
       mime-types:
         specifier: ^3.0.1
         version: 3.0.2
@@ -4929,6 +4932,9 @@ packages:
   media-typer@0.3.0:
     resolution: {integrity: sha512-dq+qelQ9akHpcOl/gUVRTxVIOkAJ1wR3QAvb4RsVjS8oVoFjDGTc679wJYmUmknUF5HwMLOgb5O+a3KxfWapPQ==}
     engines: {node: '>= 0.6'}
+
+  meilisearch@0.47.0:
+    resolution: {integrity: sha512-Qq+hatuDJ0z5c+szVb0O/uI7Z2jfMUjj8eNB6xPyKp9Og7GVnrOZJRVoDPqGoVY484Iwh+F61y2UreIetda00w==}
 
   memfs@3.5.3:
     resolution: {integrity: sha512-UERzLsxzllchadvbPs5aolHh65ISpKpM+ccLbOJ8/vvpBKmAWf+la7dXFy7Mr0ySHbdHrFv5kGFCUHHe6GFEmw==}
@@ -11743,6 +11749,8 @@ snapshots:
       '@types/mdast': 4.0.4
 
   media-typer@0.3.0: {}
+
+  meilisearch@0.47.0: {}
 
   memfs@3.5.3:
     dependencies:

@@ -62,6 +62,7 @@ import { WebhookModule } from './modules/webhook/webhook.module'
 import { DatabaseModule } from './processors/database/database.module'
 import { GatewayModule } from './processors/gateway/gateway.module'
 import { HelperModule } from './processors/helper/helper.module'
+import { MeiliSearchModule } from './processors/meili/meili.module'
 import { RedisModule } from './processors/redis/redis.module'
 
 @Module({
@@ -69,6 +70,7 @@ import { RedisModule } from './processors/redis/redis.module'
     LoggerModule,
     DatabaseModule,
     RedisModule,
+    MeiliSearchModule,
 
     // biz module
     AiModule,

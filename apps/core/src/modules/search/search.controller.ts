@@ -19,7 +19,20 @@ import { SearchService } from './search.service'
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
-  @Get('/:type')
+  @Get('/')
+  @HttpCache.disable
+  @HTTPDecorators.Paginator
+  async searchWithMeili(@Query() query: SearchDto) {
+    return this.searchService.searchWithMeili(query)
+  }
+
+  @Post('/meili/push')
+  @Auth()
+  async pushMeiliAllManually() {
+    return this.searchService.pushAllToMeiliSearch()
+  }
+
+  @Get('/type/:type')
   @HttpCache.disable
   @HTTPDecorators.Paginator
   searchByType(
@@ -40,8 +53,9 @@ export class SearchController {
     }
   }
 
+  // legacy algolia
   @Get('/algolia')
-  async search(@Query() query: SearchDto) {
+  async searchAlgolia(@Query() query: SearchDto) {
     return this.searchService.searchAlgolia(query)
   }
 
