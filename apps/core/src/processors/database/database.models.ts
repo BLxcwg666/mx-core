@@ -5,7 +5,9 @@ import { AuthnModel } from '~/modules/authn/authn.model'
 import { CategoryModel } from '~/modules/category/category.model'
 import { CommentModel } from '~/modules/comment/comment.model'
 import { OptionModel } from '~/modules/configs/configs.model'
+import { DraftModel } from '~/modules/draft/draft.model'
 import { LinkModel } from '~/modules/link/link.model'
+import { MetaPresetModel } from '~/modules/meta-preset/meta-preset.model'
 import { NoteModel } from '~/modules/note/note.model'
 import { PageModel } from '~/modules/page/page.model'
 import { PostModel } from '~/modules/post/post.model'
@@ -30,7 +32,9 @@ export const databaseModels = [
   AuthnModel,
   CategoryModel,
   CommentModel,
+  DraftModel,
   LinkModel,
+  MetaPresetModel,
   NoteModel,
   OptionModel,
   PageModel,

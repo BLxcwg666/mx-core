@@ -9,14 +9,16 @@ import { EventManagerService } from '~/processors/helper/helper.event.service'
 import { ImageService } from '~/processors/helper/helper.image.service'
 import { TextMacroService } from '~/processors/helper/helper.macro.service'
 import { InjectModel } from '~/transformers/model.transformer'
+import { dbTransforms } from '~/utils/db-transform.util'
 import { scheduleManager } from '~/utils/schedule.util'
 import { getLessThanNow } from '~/utils/time.util'
-import { isDefined, isMongoId } from 'class-validator'
+import { isDefined, isMongoId } from '~/utils/validator.util'
 import dayjs from 'dayjs'
-import { debounce, omit } from 'lodash'
-import type { FilterQuery, PaginateOptions } from 'mongoose'
+import { debounce, omit } from 'es-toolkit/compat'
+import type { PaginateOptions, QueryFilter } from 'mongoose'
 import { getArticleIdFromRoomName } from '../activity/activity.util'
 import { CommentService } from '../comment/comment.service'
+import { DraftService } from '../draft/draft.service'
 import { NoteModel } from './note.model'
 
 @Injectable()
@@ -30,6 +32,8 @@ export class NoteService {
     private readonly commentService: CommentService,
 
     private readonly textMacrosService: TextMacroService,
+    @Inject(forwardRef(() => DraftService))
+    private readonly draftService: DraftService,
   ) {}
 
   public get model() {
@@ -89,7 +93,7 @@ export class NoteService {
     }
   }
   async getLatestOne(
-    condition: FilterQuery<DocumentType<NoteModel>> = {},
+    condition: QueryFilter<DocumentType<NoteModel>> = {},
     projection: any = undefined,
   ) {
     const latest: NoteModel | null = await this.noteModel
@@ -147,10 +151,21 @@ export class NoteService {
     return isValid
   }
 
-  public async create(document: NoteModel) {
+  public async create(document: NoteModel & { draftId?: string }) {
+    const { draftId } = document
     document.created = getLessThanNow(document.created)
+    if (document.meta) {
+      document.meta = dbTransforms.json(document.meta) as any
+    }
 
     const note = await this.noteModel.create(document)
+
+    // 处理草稿：标记为已发布，并关联到新创建的日记
+    if (draftId) {
+      await this.draftService.linkToPublished(draftId, note.id)
+      await this.draftService.markAsPublished(draftId)
+    }
+
     scheduleManager.schedule(async () => {
       await Promise.all([
         this.eventManager.emit(EventBusEvents.CleanAggregateCache, null, {
@@ -193,12 +208,17 @@ export class NoteService {
     return note
   }
 
-  public async updateById(id: string, data: Partial<NoteModel>) {
+  public async updateById(
+    id: string,
+    data: Partial<NoteModel> & { draftId?: string },
+  ) {
     const oldDoc = await this.noteModel.findById(id).lean()
 
     if (!oldDoc) {
       throw new NoContentCanBeModifiedException()
     }
+
+    const { draftId } = data
 
     const hasFieldChanged = (
       [
@@ -235,6 +255,11 @@ export class NoteService {
             modified: new Date(),
           }
         : {},
+      data.meta !== undefined
+        ? {
+            meta: dbTransforms.json(data.meta),
+          }
+        : {},
     )
 
     const updated = await this.noteModel
@@ -252,6 +277,11 @@ export class NoteService {
 
     if (!updated) {
       throw new NoContentCanBeModifiedException()
+    }
+
+    // 处理草稿：标记为已发布
+    if (draftId) {
+      await this.draftService.markAsPublished(draftId)
     }
 
     scheduleManager.schedule(async () => {
@@ -379,7 +409,7 @@ export class NoteService {
   async getNotePaginationByTopicId(
     topicId: string,
     pagination: PaginateOptions = {},
-    condition?: FilterQuery<NoteModel>,
+    condition?: QueryFilter<NoteModel>,
   ) {
     const { page = 1, limit = 10, ...rest } = pagination
 

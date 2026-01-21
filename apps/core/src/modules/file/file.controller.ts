@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { nanoid } from '@mx-space/compiled'
 import {
   Delete,
   Get,
@@ -20,17 +19,16 @@ import { alphabet } from '~/constants/other.constant'
 import { STATIC_FILE_DIR } from '~/constants/path.constant'
 import { UploadService } from '~/processors/helper/helper.upload.service'
 import { PagerDto } from '~/shared/dto/pager.dto'
-import { FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import { lookup } from 'mime-types'
+import { customAlphabet } from 'nanoid'
 import {
   FileDeleteQueryDto,
   FileQueryDto,
   FileUploadDto,
   RenameFileQueryDto,
-} from './file.dto'
+} from './file.schema'
 import { FileService } from './file.service'
-
-const { customAlphabet } = nanoid
 
 @ApiController(['objects', 'files'])
 export class FileController {

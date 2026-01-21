@@ -16,12 +16,12 @@ import { HTTP_CACHE, REDIS } from '~/app.config'
 import { API_CACHE_PREFIX } from '~/constants/cache.constant'
 import * as META from '~/constants/meta.constant'
 import * as SYSTEM from '~/constants/system.constant'
+import { isTest } from '~/global/env.global'
 import { CacheService } from '~/processors/redis/cache.service'
 import { getNestExecutionContextRequest } from '~/transformers/get-req.transformer'
 import { hashString } from '~/utils/tool.util'
 import type { FastifyReply } from 'fastify'
-import { of, tap } from 'rxjs'
-import type { Observable } from 'rxjs'
+import { Observable, of, tap } from 'rxjs'
 
 /**
  * @class HttpCacheInterceptor
@@ -47,7 +47,7 @@ export class HttpCacheInterceptor implements NestInterceptor {
     // 如果想彻底禁用缓存服务，则直接返回 -> return call$;
     const call$ = next.handle()
 
-    if (REDIS.disableApiCache) {
+    if (REDIS.disableApiCache || isTest) {
       return call$
     }
 

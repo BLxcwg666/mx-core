@@ -11,11 +11,12 @@ import {
 import { ApiController } from '~/common/decorators/api-controller.decorator'
 import { Auth } from '~/common/decorators/auth.decorator'
 import { HTTPDecorators } from '~/common/decorators/http.decorator'
-import { IpLocation, IpRecord } from '~/common/decorators/ip.decorator'
+import { IpLocation } from '~/common/decorators/ip.decorator'
+import type { IpRecord } from '~/common/decorators/ip.decorator'
 import { MongoIdDto } from '~/shared/dto/id.dto'
 import { OffsetDto } from '~/shared/dto/pager.dto'
-import { RecentlyAttitudeDto } from './recently.dto'
 import { RecentlyModel } from './recently.model'
+import { RecentlyAttitudeDto, RecentlyDto } from './recently.schema'
 import { RecentlyService } from './recently.service'
 
 @ApiController(['recently', 'shorthand'])
@@ -51,8 +52,10 @@ export class RecentlyController {
   @Post('/')
   @HTTPDecorators.Idempotence()
   @Auth()
-  async create(@Body() body: RecentlyModel) {
-    const res = await this.recentlyService.create(body)
+  async create(@Body() body: RecentlyDto) {
+    const res = await this.recentlyService.create(
+      body as unknown as RecentlyModel,
+    )
 
     return res
   }

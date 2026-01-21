@@ -1,7 +1,6 @@
 import cluster from 'node:cluster'
 import { Co } from '@innei/next-async'
-import type { CoAction } from '@innei/next-async/types/interface'
-import { nanoid as N } from '@mx-space/compiled'
+import type { CoAction } from '@innei/next-async'
 import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import { BadRequestException, Injectable } from '@nestjs/common'
 import { BusinessEvents, EventScope } from '~/constants/business-event.constant'
@@ -12,8 +11,9 @@ import { EventManagerService } from '~/processors/helper/helper.event.service'
 import { UrlBuilderService } from '~/processors/helper/helper.url-builder.service'
 import { InjectModel } from '~/transformers/model.transformer'
 import { hashString, md5 } from '~/utils/tool.util'
-import { render } from 'ejs'
+import ejs from 'ejs'
 import { LRUCache } from 'lru-cache'
+import { nanoid } from 'nanoid'
 import type Mail from 'nodemailer/lib/mailer'
 import { ConfigsService } from '../configs/configs.service'
 import type { NoteModel } from '../note/note.model'
@@ -28,8 +28,6 @@ import {
 import type { SubscribeTemplateRenderProps } from './subscribe.email.default'
 import { defaultSubscribeForRenderProps } from './subscribe.email.default'
 import { SubscribeModel } from './subscribe.model'
-
-const { nanoid } = N
 
 declare type Email = string
 declare type SubscribeBit = number
@@ -209,7 +207,7 @@ export class SubscribeService implements OnModuleInit, OnModuleDestroy {
         email,
         subscribe,
         cancelToken: token,
-      })
+      } as unknown as Partial<SubscribeModel>)
     }
 
     this.subscribeMap.set(email, subscribe)
@@ -277,7 +275,7 @@ export class SubscribeService implements OnModuleInit, OnModuleDestroy {
       ...{
         subject: `[${seo.title || 'Mx Space'}] 发布了新内容~`,
         to: email,
-        html: render(finalTemplate, source),
+        html: ejs.render(finalTemplate, source),
       },
 
       headers: {

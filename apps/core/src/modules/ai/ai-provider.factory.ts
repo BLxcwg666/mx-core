@@ -38,13 +38,14 @@ export function createLanguageModel(
           `Endpoint is required for OpenAI-compatible provider: ${config.id}`,
         )
       }
-      // OpenAI-compatible providers: 创建自定义 provider 实例
-      // 确保 endpoint 规范化，添加 /v1 后缀以兼容 one-api/new-api 等聚合服务
+      // OpenAI-compatible providers: create a custom provider instance.
+      // Many "OpenAI-compatible" gateways don't fully support the SDK's automatic
+      // API selection (responses/chat/completions). Force chat models to avoid
+      // mismatches on these providers.
       const openai = createOpenAI({
         apiKey: config.apiKey,
-        baseURL: normalizeOpenAIEndpoint(config.endpoint),
+        baseURL: config.endpoint,
       })
-      // 对于兼容 API，显式使用 chat 模型格式，避免 SDK 自动选择错误的 API 类型
       return openai.chat(modelName)
     }
 

@@ -3,7 +3,7 @@ import { modelOptions, prop, Severity } from '@typegoose/typegoose'
 import { USER_COLLECTION_NAME } from '~/constants/db.constant'
 import { BaseModel } from '~/shared/model/base.model'
 import { hashSync } from 'bcryptjs'
-import { omit } from 'lodash'
+import { omit } from 'es-toolkit/compat'
 import { Schema } from 'mongoose'
 
 export type UserDocument = DocumentType<UserModel>
@@ -55,13 +55,10 @@ export class UserModel extends BaseModel {
 
   @prop({
     select: false,
-    get(val) {
-      return val
-    },
+    required: true,
     set(val) {
       return hashSync(val, 6)
     },
-    required: true,
   })
   password!: string
 

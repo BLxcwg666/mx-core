@@ -1,5 +1,3 @@
-import { URL } from 'node:url'
-import { z } from '@mx-space/compiled/zod'
 import type { OnModuleInit } from '@nestjs/common'
 import {
   BadRequestException,
@@ -24,9 +22,10 @@ import { InjectModel } from '~/transformers/model.transformer'
 import { scheduleManager } from '~/utils/schedule.util'
 import { getAvatar, hasChinese } from '~/utils/tool.util'
 import { generateObject } from 'ai'
-import { render } from 'ejs'
-import { omit, pick } from 'lodash'
+import ejs from 'ejs'
+import { omit, pick } from 'es-toolkit/compat'
 import { isObjectIdOrHexString, Types } from 'mongoose'
+import { z } from 'zod'
 import { AI_PROMPTS } from '../ai/ai.prompts'
 import { AiService } from '../ai/ai.service'
 import { ConfigsService } from '../configs/configs.service'
@@ -38,7 +37,7 @@ import type { SnippetModel } from '../snippet/snippet.model'
 import { SnippetType } from '../snippet/snippet.model'
 import { UserModel } from '../user/user.model'
 import { UserService } from '../user/user.service'
-import BlockedKeywords from './block-keywords.json'
+import BlockedKeywords from './block-keywords.json' with { type: 'json' }
 import type {
   CommentEmailTemplateRenderProps,
   CommentModelRenderProps,
@@ -551,7 +550,7 @@ export class CommentService implements OnModuleInit {
         ).toString()
       }
       case CollectionRefTypes.Recently: {
-        return new URL(`/recently/${model._id}`, base).toString()
+        return new URL(`/thinking/${model._id}`, base).toString()
       }
     }
   }
@@ -659,7 +658,7 @@ export class CommentService implements OnModuleInit {
         from: sendfrom,
         subject: `[${seo.title || 'Mx Space'}] 主人给你了新的回复呐`,
         to,
-        html: render(
+        html: ejs.render(
           (await this.mailService.readTemplate(type)) as string,
           source,
         ),
@@ -677,7 +676,7 @@ export class CommentService implements OnModuleInit {
         from: sendfrom,
         subject: `[${seo.title || 'Mx Space'}] 有新回复了耶~`,
         to,
-        html: render(
+        html: ejs.render(
           (await this.mailService.readTemplate(type)) as string,
           source,
         ),

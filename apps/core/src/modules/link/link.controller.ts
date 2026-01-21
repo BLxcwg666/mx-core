@@ -14,14 +14,12 @@ import { HTTPDecorators, Paginator } from '~/common/decorators/http.decorator'
 import { IsAuthenticated } from '~/common/decorators/role.decorator'
 import { MongoIdDto } from '~/shared/dto/id.dto'
 import { PagerDto } from '~/shared/dto/pager.dto'
-import {
-  BaseCrudFactory,
-  BaseCrudModuleType,
-} from '~/transformers/crud-factor.transformer'
+import { BaseCrudFactory } from '~/transformers/crud-factor.transformer'
+import type { BaseCrudModuleType } from '~/transformers/crud-factor.transformer'
 import { scheduleManager } from '~/utils/schedule.util'
 import type mongoose from 'mongoose'
-import { AuditReasonDto, LinkDto } from './link.dto'
 import { LinkModel, LinkState } from './link.model'
+import { AuditReasonDto, LinkDto } from './link.schema'
 import { LinkService } from './link.service'
 
 const paths = ['links', 'friends']
@@ -53,7 +51,7 @@ export class LinkControllerCrud extends BaseCrudFactory({
     @IsAuthenticated() isAuthenticated: boolean,
   ) {
     // 过滤未通过审核和被拒绝的
-    const condition: mongoose.FilterQuery<LinkModel> = {
+    const condition: mongoose.QueryFilter<LinkModel> = {
       $nor: [
         { state: LinkState.Audit },
         {
@@ -98,9 +96,12 @@ export class LinkController {
       throw new ForbiddenException('主人目前不允许申请友链了！')
     }
 
-    await this.linkService.applyForLink(body)
+    await this.linkService.applyForLink(body as unknown as LinkModel)
     scheduleManager.schedule(async () => {
-      await this.linkService.sendToMaster(body.author, body)
+      await this.linkService.sendToMaster(
+        body.author,
+        body as unknown as LinkModel,
+      )
     })
 
     return

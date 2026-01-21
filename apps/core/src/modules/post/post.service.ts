@@ -1,10 +1,10 @@
 import {
   BadRequestException,
-  forwardRef,
-  Inject,
   Injectable,
   NotFoundException,
+  OnApplicationBootstrap,
 } from '@nestjs/common'
+import { ModuleRef } from '@nestjs/core'
 import type { DocumentType } from '@typegoose/typegoose'
 import { BusinessException } from '~/common/exceptions/biz.exception'
 import { ArticleTypeEnum } from '~/constants/article.constant'
@@ -12,46 +12,62 @@ import { BusinessEvents, EventScope } from '~/constants/business-event.constant'
 import { CollectionRefTypes } from '~/constants/db.constant'
 import { ErrorCodeEnum } from '~/constants/error-code.constant'
 import { EventBusEvents } from '~/constants/event-bus.constant'
+import {
+  CATEGORY_SERVICE_TOKEN,
+  DRAFT_SERVICE_TOKEN,
+} from '~/constants/injection.constant'
 import { EventManagerService } from '~/processors/helper/helper.event.service'
 import { ImageService } from '~/processors/helper/helper.image.service'
 import { TextMacroService } from '~/processors/helper/helper.macro.service'
 import { InjectModel } from '~/transformers/model.transformer'
+import { dbTransforms } from '~/utils/db-transform.util'
 import { scheduleManager } from '~/utils/schedule.util'
 import { getLessThanNow } from '~/utils/time.util'
-import { isDefined } from 'class-validator'
-import { debounce, omit } from 'lodash'
-import type { AggregatePaginateModel, Document, Types } from 'mongoose'
+import { isDefined } from '~/utils/validator.util'
+import { debounce, omit } from 'es-toolkit/compat'
+import { Types } from 'mongoose'
+import type { AggregatePaginateModel, Document } from 'mongoose'
 import slugify from 'slugify'
 import { getArticleIdFromRoomName } from '../activity/activity.util'
-import { CategoryService } from '../category/category.service'
+import type { CategoryService } from '../category/category.service'
 import { CommentModel } from '../comment/comment.model'
+import type { DraftService } from '../draft/draft.service'
 import { SlugTrackerService } from '../slug-tracker/slug-tracker.service'
 import { PostModel } from './post.model'
 
 @Injectable()
-export class PostService {
+export class PostService implements OnApplicationBootstrap {
+  private categoryService: CategoryService
+  private draftService: DraftService
+
   constructor(
     @InjectModel(PostModel)
     private readonly postModel: MongooseModel<PostModel> &
       AggregatePaginateModel<PostModel & Document>,
     @InjectModel(CommentModel)
     private readonly commentModel: MongooseModel<CommentModel>,
-
-    @Inject(forwardRef(() => CategoryService))
-    private categoryService: CategoryService,
     private readonly imageService: ImageService,
     private readonly eventManager: EventManagerService,
     private readonly textMacroService: TextMacroService,
-
     private readonly slugTrackerService: SlugTrackerService,
+    private readonly moduleRef: ModuleRef,
   ) {}
+
+  onApplicationBootstrap() {
+    this.categoryService = this.moduleRef.get(CATEGORY_SERVICE_TOKEN, {
+      strict: false,
+    })
+    this.draftService = this.moduleRef.get(DRAFT_SERVICE_TOKEN, {
+      strict: false,
+    })
+  }
 
   get model() {
     return this.postModel
   }
 
-  async create(post: PostModel) {
-    const { categoryId } = post
+  async create(post: PostModel & { draftId?: string }) {
+    const { categoryId, draftId } = post
 
     const category = await this.categoryService.findCategoryById(
       categoryId as any as string,
@@ -76,6 +92,9 @@ export class PostService {
       categoryId: category.id,
       created: getLessThanNow(post.created),
       modified: null,
+      meta: post.meta
+        ? (dbTransforms.json(post.meta) as unknown as PostModel['meta'])
+        : undefined,
     })
 
     const doc = newPost.toJSON()
@@ -83,6 +102,12 @@ export class PostService {
 
     // 双向关联
     await this.relatedEachOther(doc, relatedIds)
+
+    // 处理草稿：标记为已发布，并关联到新创建的文章
+    if (draftId) {
+      await this.draftService.linkToPublished(draftId, doc.id)
+      await this.draftService.markAsPublished(draftId)
+    }
 
     scheduleManager.schedule(async () => {
       const doc = cloned
@@ -233,11 +258,17 @@ export class PostService {
     }
   }
 
-  async updateById(id: string, data: Partial<PostModel>) {
+  async updateById(
+    id: string,
+    data: Partial<PostModel> & { draftId?: string },
+  ) {
     const oldDocument = await this.postModel.findById(id)
     if (!oldDocument) {
       throw new BadRequestException('文章不存在')
     }
+
+    const { draftId } = data
+
     // 看看 category 改了没
     const { categoryId } = data
     if (categoryId && categoryId !== oldDocument.categoryId) {
@@ -286,9 +317,20 @@ export class PostService {
             created: getLessThanNow(data.created),
           }
         : {},
+      data.meta !== undefined
+        ? {
+            meta: dbTransforms.json(data.meta),
+          }
+        : {},
     )
 
     await oldDocument.save()
+
+    // 处理草稿：标记为已发布
+    if (draftId) {
+      await this.draftService.markAsPublished(draftId)
+    }
+
     scheduleManager.schedule(() => this.afterUpdatePost(id, data, oldDocument))
 
     return oldDocument.toObject()

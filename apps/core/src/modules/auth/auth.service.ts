@@ -1,12 +1,11 @@
 import { IncomingMessage } from 'node:http'
-import { nanoid } from '@mx-space/compiled'
 import {
   BadRequestException,
   Inject,
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common'
-import { ReturnModelType } from '@typegoose/typegoose'
+import type { ReturnModelType } from '@typegoose/typegoose'
 import { RequestContext } from '~/common/contexts/request.context'
 import { alphabet } from '~/constants/other.constant'
 import type { TokenModel, UserModel } from '~/modules/user/user.model'
@@ -15,17 +14,16 @@ import { DatabaseService } from '~/processors/database/database.service'
 import { JWTService } from '~/processors/helper/helper.jwt.service'
 import { InjectModel } from '~/transformers/model.transformer'
 import dayjs from 'dayjs'
-import { isDate, omit } from 'lodash'
+import { isDate, omit } from 'es-toolkit/compat'
 import { Types } from 'mongoose'
+import { customAlphabet } from 'nanoid'
 import {
   AUTH_JS_ACCOUNT_COLLECTION,
   AUTH_JS_USER_COLLECTION,
   AuthInstanceInjectKey,
 } from './auth.constant'
 import type { TokenDto } from './auth.controller'
-import { InjectAuthInstance } from './auth.interface'
-
-const { customAlphabet } = nanoid
+import type { InjectAuthInstance } from './auth.interface'
 
 @Injectable()
 export class AuthService {
@@ -159,8 +157,8 @@ export class AuthService {
       return null
     }
 
-    const providerAccountId = accounts[0].id
-    const provider = accounts[0].provider
+    const providerAccountId = accounts[0].accountId
+    const provider = accounts[0].providerId
 
     return {
       ...session,

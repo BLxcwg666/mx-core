@@ -12,8 +12,8 @@ import { Reflector } from '@nestjs/core'
 import { HTTP_RES_TRANSFORM_PAGINATE } from '~/constants/meta.constant'
 import * as SYSTEM from '~/constants/system.constant'
 import { transformDataToPaginate } from '~/transformers/paginate.transformer'
-import { isArrayLike } from 'lodash'
-import type { Observable } from 'rxjs'
+import { isArrayLike } from 'es-toolkit/compat'
+import { Observable } from 'rxjs'
 import { map } from 'rxjs/operators'
 
 export interface Response<T> {

@@ -2,23 +2,25 @@ import { Body, Delete, Get, Param, Post, Query } from '@nestjs/common'
 import { ApiController } from '~/common/decorators/api-controller.decorator'
 import { Auth } from '~/common/decorators/auth.decorator'
 import { HTTPDecorators } from '~/common/decorators/http.decorator'
-import { IpLocation, IpRecord } from '~/common/decorators/ip.decorator'
+import { IpLocation } from '~/common/decorators/ip.decorator'
+import type { IpRecord } from '~/common/decorators/ip.decorator'
 import { CollectionRefTypes } from '~/constants/db.constant'
 import { PagerDto } from '~/shared/dto/pager.dto'
-import { keyBy, pick } from 'lodash'
-import snakecaseKeys from 'snakecase-keys'
+import { snakecaseKeysWithCompat } from '~/utils/case.util'
+import { keyBy, pick } from 'es-toolkit/compat'
 import { ReaderService } from '../reader/reader.service'
 import { Activity } from './activity.constant'
-import { ActivityService } from './activity.service'
 import {
   ActivityDeleteDto,
   ActivityNotificationDto,
   ActivityQueryDto,
   ActivityRangeDto,
   ActivityTypeParamsDto,
-} from './dtos/activity.dto'
-import { LikeBodyDto } from './dtos/like.dto'
-import { GetPresenceQueryDto, UpdatePresenceDto } from './dtos/presence.dto'
+  GetPresenceQueryDto,
+  LikeBodyDto,
+  UpdatePresenceDto,
+} from './activity.schema'
+import { ActivityService } from './activity.service'
 
 @ApiController('/activity')
 export class ActivityController {
@@ -86,7 +88,7 @@ export class ActivityController {
       .findReaderInIds(readerIds)
       .then((arr) => {
         return arr.map((item) => {
-          return snakecaseKeys({
+          return snakecaseKeysWithCompat({
             ...item,
             id: item._id.toHexString(),
           })
@@ -96,7 +98,7 @@ export class ActivityController {
     return {
       data: keyBy(
         roomPresence.map(({ ip, ...item }) => {
-          return snakecaseKeys(item)
+          return snakecaseKeysWithCompat(item)
         }),
         'identity',
       ),

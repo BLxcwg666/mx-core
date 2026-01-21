@@ -12,12 +12,12 @@ import { ApiController } from '~/common/decorators/api-controller.decorator'
 import { Auth } from '~/common/decorators/auth.decorator'
 import { MongoIdDto } from '~/shared/dto/id.dto'
 import { PagerDto } from '~/shared/dto/pager.dto'
-import { FastifyBizRequest } from '~/transformers/get-req.transformer'
+import type { FastifyBizRequest } from '~/transformers/get-req.transformer'
 import {
   GenerateAiSummaryDto,
   GetSummaryQueryDto,
   UpdateSummaryDto,
-} from './ai-summary.dto'
+} from './ai-summary.schema'
 import { AiSummaryService } from './ai-summary.service'
 
 @ApiController('ai/summaries')
@@ -27,7 +27,7 @@ export class AiSummaryController {
   @Post('/generate')
   @Auth()
   generateSummary(@Body() body: GenerateAiSummaryDto) {
-    return this.service.generateSummaryByOpenAI(body.refId, body.lang)
+    return this.service.generateSummaryByOpenAI(body.refId, body.lang!)
   }
 
   @Get('/ref/:id')
@@ -40,6 +40,12 @@ export class AiSummaryController {
   @Auth()
   async getSummaries(@Query() query: PagerDto) {
     return this.service.getAllSummaries(query)
+  }
+
+  @Get('/grouped')
+  @Auth()
+  async getSummariesGrouped(@Query() query: PagerDto) {
+    return this.service.getAllSummariesGrouped(query)
   }
 
   @Patch('/:id')

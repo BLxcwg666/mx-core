@@ -10,10 +10,9 @@ import type {
 import { Injectable } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { RESPONSE_PASSTHROUGH_METADATA } from '~/constants/system.constant'
-import { isObjectLike } from 'lodash'
-import { map } from 'rxjs'
-import type { Observable } from 'rxjs'
-import snakecaseKeys from 'snakecase-keys'
+import { snakecaseKeysWithCompat } from '~/utils/case.util'
+import { isObjectLike } from 'es-toolkit/compat'
+import { map, Observable } from 'rxjs'
 
 @Injectable()
 export class JSONTransformInterceptor implements NestInterceptor {
@@ -85,7 +84,7 @@ export class JSONTransformInterceptor implements NestInterceptor {
         obj[key] = this.serialize(obj[key])
       }
 
-      obj = snakecaseKeys(obj)
+      obj = snakecaseKeysWithCompat(obj)
     }
     return obj
   }

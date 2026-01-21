@@ -16,11 +16,11 @@ import { IsAuthenticated } from '~/common/decorators/role.decorator'
 import { MongoIdDto } from '~/shared/dto/id.dto'
 import { getShortDateTime } from '~/utils/time.util'
 import dayjs from 'dayjs'
-import { render } from 'ejs'
-import { isNil } from 'lodash'
+import ejs from 'ejs'
+import { isNil } from 'es-toolkit/compat'
 import xss from 'xss'
 import { ConfigsService } from '../configs/configs.service'
-import { MarkdownPreviewDto } from '../markdown/markdown.dto'
+import { MarkdownPreviewDto } from '../markdown/markdown.schema'
 import { MarkdownService } from '../markdown/markdown.service'
 import type { NoteModel } from '../note/note.model'
 import type { PageModel } from '../page/page.model'
@@ -87,7 +87,7 @@ export class RenderEjsController {
       theme,
     )
 
-    const html = render(await this.service.getMarkdownEjsRenderTemplate(), {
+    const html = ejs.render(await this.service.getMarkdownEjsRenderTemplate(), {
       ...structure,
       info: isPrivateOrEncrypt ? '正在查看的文章还未公开' : undefined,
 
@@ -127,10 +127,12 @@ export class RenderEjsController {
       title,
       theme,
     )
-    return render(await this.service.getMarkdownEjsRenderTemplate(), {
-      ...structure,
+    return ejs
+      .render(await this.service.getMarkdownEjsRenderTemplate(), {
+        ...structure,
 
-      title: xss(title),
-    }).trim()
+        title: xss(title),
+      })
+      .trim()
   }
 }

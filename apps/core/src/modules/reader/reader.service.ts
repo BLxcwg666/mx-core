@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import { ReturnModelType } from '@typegoose/typegoose'
+import type { ReturnModelType } from '@typegoose/typegoose'
 import { DatabaseService } from '~/processors/database/database.service'
 import { InjectModel } from '~/transformers/model.transformer'
 import { Document } from 'mongodb'
@@ -73,6 +73,38 @@ export class ReaderService {
       .collection(AUTH_JS_USER_COLLECTION)
       .aggregate(this.buildQueryPipeline())
       .toArray()
+  }
+
+  async findPaginated(page: number, size: number) {
+    const skip = (page - 1) * size
+    const collection = this.databaseService.db.collection(
+      AUTH_JS_USER_COLLECTION,
+    )
+
+    const pipeline = this.buildQueryPipeline()
+
+    // Get total count (unique users, not accounts)
+    const totalDocs = await collection.countDocuments()
+
+    // Add pagination to pipeline
+    const paginatedPipeline = [...pipeline, { $skip: skip }, { $limit: size }]
+
+    const docs = await collection.aggregate(paginatedPipeline).toArray()
+
+    const totalPages = Math.ceil(totalDocs / size)
+    const hasNextPage = page < totalPages
+    const hasPrevPage = page > 1
+
+    // Return mongoose PaginateResult compatible format
+    return {
+      docs,
+      totalDocs,
+      page,
+      limit: size,
+      totalPages,
+      hasNextPage,
+      hasPrevPage,
+    }
   }
   async updateAsOwner(id: string) {
     return this.databaseService.db

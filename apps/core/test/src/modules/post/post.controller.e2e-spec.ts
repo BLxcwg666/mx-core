@@ -1,9 +1,17 @@
 import { createRedisProvider } from '@/mock/modules/redis.mock'
 import { APP_INTERCEPTOR } from '@nestjs/core'
+import { apiRoutePrefix } from '~/common/decorators/api-controller.decorator'
+import {
+  CATEGORY_SERVICE_TOKEN,
+  DRAFT_SERVICE_TOKEN,
+  POST_SERVICE_TOKEN,
+} from '~/constants/injection.constant'
 import { CategoryModel } from '~/modules/category/category.model'
 import { CategoryService } from '~/modules/category/category.service'
 import { CommentModel } from '~/modules/comment/comment.model'
 import { OptionModel } from '~/modules/configs/configs.model'
+import { DraftModel } from '~/modules/draft/draft.model'
+import { DraftService } from '~/modules/draft/draft.service'
 import { PostController } from '~/modules/post/post.controller'
 import { PostModel } from '~/modules/post/post.model'
 import { PostService } from '~/modules/post/post.service'
@@ -30,8 +38,16 @@ describe('PostController (e2e)', async () => {
     controllers: [PostController],
     providers: [
       PostService,
+      {
+        provide: POST_SERVICE_TOKEN,
+        useExisting: PostService,
+      },
       ImageService,
       CategoryService,
+      {
+        provide: CATEGORY_SERVICE_TOKEN,
+        useExisting: CategoryService,
+      },
       SlugTrackerService,
       {
         provide: APP_INTERCEPTOR,
@@ -58,6 +74,11 @@ describe('PostController (e2e)', async () => {
       authProvider,
 
       countingServiceProvider,
+      DraftService,
+      {
+        provide: DRAFT_SERVICE_TOKEN,
+        useExisting: DraftService,
+      },
     ],
     imports: [],
     models: [
@@ -67,6 +88,7 @@ describe('PostController (e2e)', async () => {
       CategoryModel,
       CommentModel,
       SlugTrackerModel,
+      DraftModel,
     ],
     async pourData(modelMap) {
       // @ts-ignore
@@ -90,7 +112,7 @@ describe('PostController (e2e)', async () => {
   test('GET /', async () => {
     const data = await proxy.app.inject({
       method: 'GET',
-      url: '/posts',
+      url: `${apiRoutePrefix}/posts`,
     })
 
     expect(data.statusCode).toBe(200)

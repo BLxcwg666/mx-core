@@ -14,6 +14,7 @@ import {
   POST_COLLECTION_NAME,
   RECENTLY_COLLECTION_NAME,
 } from '~/constants/db.constant'
+import { POST_SERVICE_TOKEN } from '~/constants/injection.constant'
 import { DatabaseService } from '~/processors/database/database.service'
 import { GatewayService } from '~/processors/gateway/gateway.service'
 import { WebEventsGateway } from '~/processors/gateway/web/events.gateway'
@@ -22,8 +23,9 @@ import { EventManagerService } from '~/processors/helper/helper.event.service'
 import { InjectModel } from '~/transformers/model.transformer'
 import { transformDataToPaginate } from '~/transformers/paginate.transformer'
 import { checkRefModelCollectionType } from '~/utils/biz.util'
+import { dbTransforms } from '~/utils/db-transform.util'
 import { camelcaseKeys } from '~/utils/tool.util'
-import { omit, pick, uniqBy } from 'lodash'
+import { omit, pick, uniqBy } from 'es-toolkit/compat'
 import { ObjectId } from 'mongodb'
 import type { Document } from 'mongoose'
 import type { Socket } from 'socket.io'
@@ -34,7 +36,7 @@ import type { NoteModel } from '../note/note.model'
 import { NoteService } from '../note/note.service'
 import type { PageModel } from '../page/page.model'
 import type { PostModel } from '../post/post.model'
-import { PostService } from '../post/post.service'
+import type { PostService } from '../post/post.service'
 import { ReaderModel } from '../reader/reader.model'
 import { ReaderService } from '../reader/reader.service'
 import type { RecentlyModel } from '../recently/recently.model'
@@ -45,12 +47,12 @@ import type {
   ActivityPresence,
 } from './activity.interface'
 import { ActivityModel } from './activity.model'
+import type { UpdatePresenceDto } from './activity.schema'
 import {
   extractArticleIdFromRoomName,
   isValidRoomName,
   parseRoomName,
 } from './activity.util'
-import type { UpdatePresenceDto } from './dtos/presence.dto'
 
 declare module '~/types/socket-meta' {
   interface SocketMetadata {
@@ -76,7 +78,7 @@ export class ActivityService implements OnModuleInit, OnModuleDestroy {
     private readonly gatewayService: GatewayService,
     private readonly configsService: ConfigsService,
 
-    @Inject(forwardRef(() => PostService))
+    @Inject(POST_SERVICE_TOKEN)
     private readonly postService: PostService,
     @Inject(forwardRef(() => NoteService))
     private readonly noteService: NoteService,
@@ -116,7 +118,7 @@ export class ActivityService implements OnModuleInit, OnModuleDestroy {
         }
         this.activityModel.create({
           type: Activity.ReadDuration,
-          payload: {
+          payload: dbTransforms.json({
             connectedAt,
             operationTime,
             updatedAt,
@@ -125,7 +127,7 @@ export class ActivityService implements OnModuleInit, OnModuleDestroy {
             displayName,
             joinedAt,
             ip,
-          },
+          }),
         })
       }
     }
@@ -356,12 +358,12 @@ export class ActivityService implements OnModuleInit, OnModuleDestroy {
     await this.activityModel.create({
       type: Activity.Like,
       created: new Date(),
-      payload: {
+      payload: dbTransforms.json({
         ip,
         type,
         id,
         readerId: reader ? readerId : undefined,
-      } as ActivityLikePayload,
+      } as ActivityLikePayload),
     })
   }
 

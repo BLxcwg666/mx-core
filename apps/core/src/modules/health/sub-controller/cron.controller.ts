@@ -7,15 +7,15 @@ import {
 } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { SchedulerRegistry } from '@nestjs/schedule'
-import { SCHEDULE_CRON_OPTIONS } from '@nestjs/schedule/dist/schedule.constants'
 import { ApiController } from '~/common/decorators/api-controller.decorator'
 import { Auth } from '~/common/decorators/auth.decorator'
 import { HTTPDecorators } from '~/common/decorators/http.decorator'
 import { CRON_DESCRIPTION } from '~/constants/meta.constant'
+import { SCHEDULE_CRON_OPTIONS } from '~/constants/system.constant'
 import { CronService } from '~/processors/helper/helper.cron.service'
 import { TaskQueueService } from '~/processors/helper/helper.tq.service'
-import { isString } from 'class-validator'
-import { isFunction } from 'lodash'
+import { isString } from '~/utils/validator.util'
+import { isFunction } from 'es-toolkit/compat'
 
 @ApiController('health/cron')
 @Auth()
@@ -63,9 +63,11 @@ export class HealthCronController {
     if (!hasMethod) {
       throw new BadRequestException(`${name} is not a cron`)
     }
-    this.taskQueue.add(name, async () =>
-      this.cronService[name].call(this.cronService),
-    )
+    const method = cron[name]
+    if (!isFunction(method)) {
+      throw new BadRequestException(`${name} is not a valid cron method`)
+    }
+    this.taskQueue.add(name, async () => method.call(this.cronService))
   }
 
   @Get('/task/:name')

@@ -1,4 +1,3 @@
-import { z } from '@mx-space/compiled/zod'
 import { Injectable, Logger } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
 import { BizException } from '~/common/exceptions/biz.exception'
@@ -13,6 +12,7 @@ import { transformDataToPaginate } from '~/transformers/paginate.transformer'
 import { md5 } from '~/utils/tool.util'
 import { generateObject } from 'ai'
 import removeMdCodeblock from 'remove-md-codeblock'
+import { z } from 'zod'
 import { ConfigsService } from '../../configs/configs.service'
 import { AI_TASK_LOCK_TTL, DEFAULT_SUMMARY_LANG } from '../ai.constants'
 import { AI_PROMPTS } from '../ai.prompts'
@@ -166,6 +166,112 @@ export class AiSummaryService {
     }
   }
 
+  async getAllSummariesGrouped(pager: PagerDto) {
+    const { page, size } = pager
+
+    // First, get unique refIds with pagination
+    const aggregateResult = await this.aiSummaryModel.aggregate([
+      {
+        $group: {
+          _id: '$refId',
+          latestCreated: { $max: '$created' },
+          summaryCount: { $sum: 1 },
+        },
+      },
+      { $sort: { latestCreated: -1 } },
+      {
+        $facet: {
+          metadata: [{ $count: 'total' }],
+          data: [{ $skip: (page - 1) * size }, { $limit: size }],
+        },
+      },
+    ])
+
+    const metadata = aggregateResult[0]?.metadata[0]
+    const groupedRefIds = aggregateResult[0]?.data || []
+    const total = metadata?.total || 0
+
+    if (groupedRefIds.length === 0) {
+      return {
+        data: [],
+        pagination: {
+          total: 0,
+          currentPage: page,
+          totalPage: 0,
+          size,
+          hasNextPage: false,
+          hasPrevPage: false,
+        },
+      }
+    }
+
+    // Get all summaries for these refIds
+    const refIds = groupedRefIds.map((g: { _id: string }) => g._id)
+    const summaries = await this.aiSummaryModel
+      .find({ refId: { $in: refIds } })
+      .sort({ created: -1 })
+      .lean()
+
+    // Get article info
+    const articles = await this.databaseService.findGlobalByIds(refIds)
+    const articleMap = {} as Record<
+      string,
+      { title: string; id: string; type: CollectionRefTypes }
+    >
+    for (const a of articles.notes) {
+      articleMap[a.id] = {
+        title: a.title,
+        id: a.id,
+        type: CollectionRefTypes.Note,
+      }
+    }
+    for (const a of articles.posts) {
+      articleMap[a.id] = {
+        title: a.title,
+        id: a.id,
+        type: CollectionRefTypes.Post,
+      }
+    }
+
+    // Group summaries by refId
+    const summariesByRefId = summaries.reduce(
+      (acc, summary) => {
+        if (!acc[summary.refId]) {
+          acc[summary.refId] = []
+        }
+        acc[summary.refId].push(summary)
+        return acc
+      },
+      {} as Record<string, AISummaryModel[]>,
+    )
+
+    // Build grouped data maintaining the order from aggregation
+    const groupedData = refIds
+      .map((refId: string) => {
+        const article = articleMap[refId]
+        if (!article) return null
+        return {
+          article,
+          summaries: summariesByRefId[refId] || [],
+        }
+      })
+      .filter(Boolean)
+
+    const totalPage = Math.ceil(total / size)
+
+    return {
+      data: groupedData,
+      pagination: {
+        total,
+        currentPage: page,
+        totalPage,
+        size,
+        hasNextPage: page < totalPage,
+        hasPrevPage: page > 1,
+      },
+    }
+  }
+
   private async getRefArticles(docs: AISummaryModel[]) {
     const articles = await this.databaseService.findGlobalByIds(
       docs.map((d) => d.refId),
@@ -237,7 +343,7 @@ export class AiSummaryService {
 
     const aiSummaryTargetLanguage = await this.configService
       .get('ai')
-      .then((c) => c.aiSummaryTargetLanguage)
+      .then((c) => c.aiSummaryTargetLanguage || DEFAULT_SUMMARY_LANG)
 
     const targetLanguage =
       aiSummaryTargetLanguage === 'auto'
@@ -298,7 +404,7 @@ export class AiSummaryService {
     }
     const targetLanguage = await this.configService
       .get('ai')
-      .then((c) => c.aiSummaryTargetLanguage)
+      .then((c) => c.aiSummaryTargetLanguage || DEFAULT_SUMMARY_LANG)
 
     await this.generateSummaryByOpenAI(
       event.id,

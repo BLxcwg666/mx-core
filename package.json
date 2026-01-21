@@ -1,6 +1,9 @@
 {
   "private": true,
   "packageManager": "pnpm@10.10.0+sha512.d615db246fe70f25dcfea6d8d73dee782ce23e2245e3c4f6f888249fb568149318637dca73c2c5c8ef2a4ca0d5657fb9567188bfab47f566d1ee6ce987815c39",
+  "engines": {
+    "node": ">=22"
+  },
   "license": "AGPLv3",
   "homepage": "https://github.com/mx-space/core#readme",
   "repository": {
@@ -9,13 +12,12 @@
   },
   "author": "Innei <https://innei.in>",
   "scripts": {
-    "format": "prettier --write \"apps/**/*.ts\" \"packages/**/*.ts\"",
+    "format": "prettier --write \"apps/**/*.ts\"",
     "prepare": "simple-git-hooks && node scripts/init-project.mjs",
-    "build:external": "pnpm -C \"packages/compiled\" run build",
-    "build": "pnpm run build:external && pnpm -C \"apps/core\" run build",
-    "dev": "pnpm run build:external && pnpm -C \"apps/core\" run start",
-    "bundle": "pnpm run build:external && pnpm -C \"apps/core\" run bundle",
-    "test": "pnpm run build:external && pnpm -C \"apps/core\" run test",
+    "build": "pnpm -C \"apps/core\" run build",
+    "dev": "pnpm -C \"apps/core\" run start",
+    "bundle": "pnpm -C \"apps/core\" run bundle",
+    "test": "pnpm -C \"apps/core\" run test",
     "lint": "pnpm -C \"apps/core\" run lint",
     "publish:core": "cd apps/core && npm run publish"
   },
@@ -27,10 +29,10 @@
     "eslint": "^9.36.0",
     "lint-staged": "16.2.7",
     "mongodb-memory-server": "11.0.1",
-    "prettier": "3.7.4",
+    "prettier": "3.8.0",
     "prettier-package-json": "2.8.0",
     "prettier-plugin-ember-template-tag": "2.1.2",
-    "redis-memory-server": "0.14.1",
+    "redis-memory-server": "0.15.0",
     "rimraf": "6.1.2",
     "rolldown": "1.0.0-beta.60",
     "simple-git-hooks": "2.13.1",
@@ -38,7 +40,7 @@
     "tsconfig-paths": "4.2.0",
     "typescript": "5.9.3",
     "vite-tsconfig-paths": "6.0.4",
-    "zx-cjs": "7.0.7-0"
+    "zx": "8.8.5"
   },
   "resolutions": {
     "rolldown": "1.0.0-beta.60",
@@ -48,7 +50,7 @@
     "semver": "7.7.3",
     "typescript": "5.9.3",
     "whatwg-url": "14.1.1",
-    "zod": "3.25.76"
+    "zod": "4.3.5"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged"

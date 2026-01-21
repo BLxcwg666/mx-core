@@ -5,7 +5,7 @@ import { Auth } from '~/common/decorators/auth.decorator'
 import { HttpCache } from '~/common/decorators/cache.decorator'
 import { IsAuthenticated } from '~/common/decorators/role.decorator'
 import { CacheKeys } from '~/constants/cache.constant'
-import { omit } from 'lodash'
+import { omit } from 'es-toolkit/compat'
 import { AnalyzeService } from '../analyze/analyze.service'
 import { ConfigsService } from '../configs/configs.service'
 import { NoteService } from '../note/note.service'
@@ -17,7 +17,7 @@ import {
   ReadAndLikeCountTypeDto,
   TimelineQueryDto,
   TopQueryDto,
-} from './aggregate.dto'
+} from './aggregate.schema'
 import { AggregateService } from './aggregate.service'
 
 @ApiController('aggregate')
@@ -133,5 +133,41 @@ export class AggregateController {
     return {
       length: await this.aggregateService.getAllSiteWordsCount(),
     }
+  }
+
+  @Get('/stat/category-distribution')
+  @Auth()
+  async getCategoryDistribution() {
+    return await this.aggregateService.getCategoryDistribution()
+  }
+
+  @Get('/stat/tag-cloud')
+  @Auth()
+  async getTagCloud() {
+    return await this.aggregateService.getTagCloud()
+  }
+
+  @Get('/stat/publication-trend')
+  @Auth()
+  async getPublicationTrend() {
+    return await this.aggregateService.getPublicationTrend()
+  }
+
+  @Get('/stat/top-articles')
+  @Auth()
+  async getTopArticles() {
+    return await this.aggregateService.getTopArticles()
+  }
+
+  @Get('/stat/comment-activity')
+  @Auth()
+  async getCommentActivity() {
+    return await this.aggregateService.getCommentActivity()
+  }
+
+  @Get('/stat/traffic-source')
+  @Auth()
+  async getTrafficSource() {
+    return await this.aggregateService.getTrafficSource()
   }
 }

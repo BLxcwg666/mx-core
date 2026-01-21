@@ -1,13 +1,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { BetterAuthOptions } from '@mx-space/compiled/auth'
 import type { NestMiddleware, OnModuleInit } from '@nestjs/common'
 import { Inject } from '@nestjs/common'
 import { EventBusEvents } from '~/constants/event-bus.constant'
 import { SubPubBridgeService } from '~/processors/redis/subpub.service'
+import type { BetterAuthOptions } from 'better-auth'
 import { ConfigsService } from '../configs/configs.service'
 import { AuthInstanceInjectKey } from './auth.constant'
 import { CreateAuth } from './auth.implement'
-import { InjectAuthInstance } from './auth.interface'
+import type { InjectAuthInstance } from './auth.interface'
 
 declare module 'http' {
   interface IncomingMessage {
@@ -31,13 +31,13 @@ export class AuthMiddleware implements NestMiddleware, OnModuleInit {
 
       const providers = {} as NonNullable<BetterAuthOptions['socialProviders']>
       await Promise.all(
-        oauth.providers.map(async (provider) => {
+        (oauth.providers || []).map(async (provider) => {
           if (!provider.enabled) return
           const type = provider.type as string
 
           const mergedConfig = {
-            ...oauth.public[type],
-            ...oauth.secrets[type],
+            ...(oauth.public?.[type] || {}),
+            ...(oauth.secrets?.[type] || {}),
           }
           const urls = await this.configService.get('url')
           switch (type) {

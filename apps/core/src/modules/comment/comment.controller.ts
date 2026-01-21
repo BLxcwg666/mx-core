@@ -20,7 +20,8 @@ import {
   CurrentUser,
 } from '~/common/decorators/current-user.decorator'
 import { HTTPDecorators } from '~/common/decorators/http.decorator'
-import { IpLocation, IpRecord } from '~/common/decorators/ip.decorator'
+import { IpLocation } from '~/common/decorators/ip.decorator'
+import type { IpRecord } from '~/common/decorators/ip.decorator'
 import { IsAuthenticated } from '~/common/decorators/role.decorator'
 import { BizException } from '~/common/exceptions/biz.exception'
 import { CannotFindException } from '~/common/exceptions/cant-find.exception'
@@ -32,23 +33,23 @@ import { MongoIdDto } from '~/shared/dto/id.dto'
 import { PagerDto } from '~/shared/dto/pager.dto'
 import { transformDataToPaginate } from '~/transformers/paginate.transformer'
 import { scheduleManager } from '~/utils/schedule.util'
-import { isUndefined, keyBy } from 'lodash'
-import type { Document, FilterQuery } from 'mongoose'
+import { isUndefined, keyBy } from 'es-toolkit/compat'
+import type { Document, QueryFilter } from 'mongoose'
 import { ConfigsService } from '../configs/configs.service'
 import { ReaderModel } from '../reader/reader.model'
 import { ReaderService } from '../reader/reader.service'
 import { UserModel } from '../user/user.model'
+import { CommentReplyMailType } from './comment.enum'
+import { CommentFilterEmailInterceptor } from './comment.interceptor'
+import type { CommentModel } from './comment.model'
+import { CommentState } from './comment.model'
 import {
   CommentDto,
   CommentRefTypesDto,
   CommentStatePatchDto,
   EditCommentDto,
   TextOnlyDto,
-} from './comment.dto'
-import { CommentReplyMailType } from './comment.enum'
-import { CommentFilterEmailInterceptor } from './comment.interceptor'
-import type { CommentModel } from './comment.model'
-import { CommentState } from './comment.model'
+} from './comment.schema'
 import { CommentService } from './comment.service'
 
 const idempotenceMessage = '哦吼，这句话你已经说过啦'
@@ -133,7 +134,7 @@ export class CommentController {
     const configs = await this.configsService.get('commentOptions')
     const { commentShouldAudit } = configs
 
-    const $and: FilterQuery<CommentModel & Document<any, any, any>>[] = [
+    const $and: QueryFilter<CommentModel & Document<any, any, any>>[] = [
       {
         parent: undefined,
         ref: id,

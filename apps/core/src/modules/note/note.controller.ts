@@ -12,7 +12,8 @@ import {
 import { ApiController } from '~/common/decorators/api-controller.decorator'
 import { Auth } from '~/common/decorators/auth.decorator'
 import { HTTPDecorators, Paginator } from '~/common/decorators/http.decorator'
-import { IpLocation, IpRecord } from '~/common/decorators/ip.decorator'
+import { IpLocation } from '~/common/decorators/ip.decorator'
+import type { IpRecord } from '~/common/decorators/ip.decorator'
 import { IsAuthenticated } from '~/common/decorators/role.decorator'
 import { CannotFindException } from '~/common/exceptions/cant-find.exception'
 import { CountingService } from '~/processors/helper/helper.counting.service'
@@ -20,15 +21,17 @@ import { TextMacroService } from '~/processors/helper/helper.macro.service'
 import { MongoIdDto } from '~/shared/dto/id.dto'
 import { PagerDto } from '~/shared/dto/pager.dto'
 import { addYearCondition } from '~/transformers/db-query.transformer'
-import type { FilterQuery } from 'mongoose'
+import type { QueryFilter } from 'mongoose'
+import { NoteModel } from './note.model'
 import {
   ListQueryDto,
   NidType,
+  NoteDto,
   NotePasswordQueryDto,
   NoteQueryDto,
+  PartialNoteDto,
   SetNotePublishStatusDto,
-} from './note.dto'
-import { NoteModel, PartialNoteModel } from './note.model'
+} from './note.schema'
 import { NoteService } from './note.service'
 
 @ApiController({ path: 'notes' })
@@ -154,21 +157,24 @@ export class NoteController {
   @Post('/')
   @HTTPDecorators.Idempotence()
   @Auth()
-  async create(@Body() body: NoteModel) {
-    return await this.noteService.create(body)
+  async create(@Body() body: NoteDto) {
+    return await this.noteService.create(body as unknown as NoteModel)
   }
 
   @Put('/:id')
   @Auth()
-  async modify(@Body() body: NoteModel, @Param() params: MongoIdDto) {
-    await this.noteService.updateById(params.id, body)
+  async modify(@Body() body: NoteDto, @Param() params: MongoIdDto) {
+    await this.noteService.updateById(params.id, body as unknown as NoteModel)
     return this.noteService.findOneByIdOrNid(params.id)
   }
 
   @Patch('/:id')
   @Auth()
-  async patch(@Body() body: PartialNoteModel, @Param() params: MongoIdDto) {
-    await this.noteService.updateById(params.id, body)
+  async patch(@Body() body: PartialNoteDto, @Param() params: MongoIdDto) {
+    await this.noteService.updateById(
+      params.id,
+      body as unknown as Partial<NoteModel>,
+    )
     return
   }
 
@@ -282,7 +288,7 @@ export class NoteController {
       sortBy,
       sortOrder,
     } = query
-    const condition: FilterQuery<NoteModel> = isAuthenticated
+    const condition: QueryFilter<NoteModel> = isAuthenticated
       ? { $or: [{ isPublished: false }, { isPublished: true }] }
       : { isPublished: true }
 

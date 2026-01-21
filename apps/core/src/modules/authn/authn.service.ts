@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common'
 import type {
+  AuthenticationResponseJSON,
+  CredentialDeviceType,
+  RegistrationResponseJSON,
   VerifiedAuthenticationResponse,
   VerifiedRegistrationResponse,
 } from '@simplewebauthn/server'
@@ -10,12 +13,7 @@ import {
   verifyRegistrationResponse,
 } from '@simplewebauthn/server'
 import { isoBase64URL, isoUint8Array } from '@simplewebauthn/server/helpers'
-import type {
-  AuthenticationResponseJSON,
-  CredentialDeviceType,
-  RegistrationResponseJSON,
-} from '@simplewebauthn/server/script/deps'
-import { ReturnModelType } from '@typegoose/typegoose'
+import type { ReturnModelType } from '@typegoose/typegoose'
 import { RequestContext } from '~/common/contexts/request.context'
 import { RedisKeys } from '~/constants/cache.constant'
 import { RedisService } from '~/processors/redis/redis.service'
@@ -25,10 +23,6 @@ import { ConfigsService } from '../configs/configs.service'
 import type { UserDocument } from '../user/user.model'
 import { AuthnModel } from './authn.model'
 
-// TODO Compatible with versions below node v20
-if (!globalThis.crypto) {
-  globalThis.crypto = require('node:crypto').webcrypto
-}
 @Injectable()
 export class AuthnService {
   constructor(
@@ -79,7 +73,9 @@ export class AuthnService {
 
       excludeCredentials: userAuthenticators.map((authenticator) => {
         return {
-          id: isoBase64URL.fromBuffer(authenticator.credentialID),
+          id: isoBase64URL.fromBuffer(
+            new Uint8Array(authenticator.credentialID),
+          ),
           type: 'public-key',
           // Optional
           // transports: authenticator.transports,
@@ -148,18 +144,13 @@ export class AuthnService {
     if (!registrationInfo) {
       throw new BadRequestException('registrationInfo is not found')
     }
-    const {
-      credentialPublicKey,
-      credentialID,
-      counter,
-      credentialDeviceType,
-      credentialBackedUp,
-    } = registrationInfo
+    const { credential, credentialDeviceType, credentialBackedUp } =
+      registrationInfo
 
     const authenticator: Authenticator = {
-      credentialID: isoBase64URL.toBuffer(credentialID),
-      credentialPublicKey,
-      counter,
+      credentialID: isoBase64URL.toBuffer(credential.id),
+      credentialPublicKey: credential.publicKey,
+      counter: credential.counter,
       credentialDeviceType,
       credentialBackedUp,
     }
@@ -184,7 +175,7 @@ export class AuthnService {
       rpID,
       // Require users to use a previously-registered authenticator
       allowCredentials: userAuthenticators.map((authenticator) => ({
-        id: isoBase64URL.fromBuffer(authenticator.credentialID),
+        id: isoBase64URL.fromBuffer(new Uint8Array(authenticator.credentialID)),
         type: 'public-key',
       })),
       userVerification: 'preferred',
@@ -227,9 +218,12 @@ export class AuthnService {
         expectedChallenge,
         expectedOrigin,
         expectedRPID,
-        authenticator: {
-          ...authenticator,
-          credentialID: isoBase64URL.fromBuffer(authenticator.credentialID),
+        credential: {
+          id: isoBase64URL.fromBuffer(
+            new Uint8Array(authenticator.credentialID),
+          ),
+          publicKey: new Uint8Array(authenticator.credentialPublicKey),
+          counter: authenticator.counter,
         },
 
         requireUserVerification: false,

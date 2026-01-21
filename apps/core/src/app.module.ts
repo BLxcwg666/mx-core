@@ -31,6 +31,7 @@ import { CommentModule } from './modules/comment/comment.module'
 import { ConfigsModule } from './modules/configs/configs.module'
 import { DebugModule } from './modules/debug/debug.module'
 import { DependencyModule } from './modules/dependency/dependency.module'
+import { DraftModule } from './modules/draft/draft.module'
 import { FeedModule } from './modules/feed/feed.module'
 import { FileModule } from './modules/file/file.module'
 import { HealthModule } from './modules/health/health.module'
@@ -38,6 +39,7 @@ import { HelperModule as BizHelperModule } from './modules/helper/helper.module'
 import { InitModule } from './modules/init/init.module'
 import { LinkModule } from './modules/link/link.module'
 import { MarkdownModule } from './modules/markdown/markdown.module'
+import { MetaPresetModule } from './modules/meta-preset/meta-preset.module'
 import { NoteModule } from './modules/note/note.module'
 import { OptionModule } from './modules/option/option.module'
 import { PageModule } from './modules/page/page.module'
@@ -87,11 +89,13 @@ import { RedisModule } from './processors/redis/redis.module'
     ConfigsModule,
 
     DependencyModule,
+    DraftModule,
     FeedModule,
     FileModule,
     HealthModule,
     LinkModule,
     MarkdownModule,
+    MetaPresetModule,
     NoteModule,
     OptionModule,
     PageModule,

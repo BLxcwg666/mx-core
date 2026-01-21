@@ -1,18 +1,12 @@
 import { IncomingMessage } from 'node:http'
 import type { ServerResponse } from 'node:http'
-import type {
-  BetterAuthOptions,
-  BetterAuthPlugin,
-} from '@mx-space/compiled/auth'
-import {
-  APIError,
-  betterAuth,
-  createAuthMiddleware,
-  mongodbAdapter,
-  toNodeHandler,
-} from '@mx-space/compiled/auth'
 import { API_VERSION, CROSS_DOMAIN, MONGO_DB } from '~/app.config'
 import { SECURITY } from '~/app.config.test'
+import type { BetterAuthOptions, BetterAuthPlugin } from 'better-auth'
+import { betterAuth } from 'better-auth'
+import { mongodbAdapter } from 'better-auth/adapters/mongodb'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
+import { toNodeHandler } from 'better-auth/node'
 import { MongoClient } from 'mongodb'
 import {
   AUTH_JS_ACCOUNT_COLLECTION,
@@ -28,6 +22,7 @@ export async function CreateAuth(
   providers: BetterAuthOptions['socialProviders'],
 ) {
   const auth = betterAuth({
+    telemetry: { enabled: false },
     database: mongodbAdapter(db),
     socialProviders: providers,
     basePath: isDev ? '/auth' : `/api/v${API_VERSION}/auth`,
@@ -60,7 +55,7 @@ export async function CreateAuth(
           after: [
             {
               matcher(context) {
-                return context.path.startsWith('/callback')
+                return context.path?.startsWith('/callback') ?? false
               },
               handler: createAuthMiddleware(async (ctx) => {
                 {
