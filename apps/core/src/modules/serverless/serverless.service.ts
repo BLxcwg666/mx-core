@@ -4,6 +4,7 @@ import { parseAsync, transformAsync } from '@babel/core'
 import * as t from '@babel/types'
 import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common'
 import {
+  HttpException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -381,10 +382,32 @@ export class ServerlessService implements OnModuleInit, OnModuleDestroy {
         `Serverless function error [${scope}]: ${result.error?.message}`,
         result.error?.stack,
       )
+      // Handle error with status code if available
+      const statusCode = result.error?.status
+      if (statusCode) {
+        throw new HttpException(
+          result.error?.message || 'Unknown error',
+          statusCode,
+        )
+      }
       throw new BizException(
         ErrorCodeEnum.ServerlessError,
         result.error?.message || 'Unknown error, please check log',
       )
+    }
+
+    // Apply response metadata from sandbox
+    const { responseMetadata } = result
+    if (responseMetadata) {
+      if (responseMetadata.type) {
+        context.res.type(responseMetadata.type)
+      }
+      if (responseMetadata.status) {
+        context.res.status(
+          responseMetadata.status,
+          responseMetadata.statusMessage ?? undefined,
+        )
+      }
     }
 
     return result.data

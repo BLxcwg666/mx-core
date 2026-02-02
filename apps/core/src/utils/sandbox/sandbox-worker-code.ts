@@ -231,6 +231,15 @@ async function executeCode(payload) {
   const { code, context, timeout, namespace } = payload;
   const timerManager = createTimerManager();
 
+  // Response metadata for type/status/etc
+  const responseMetadata = {
+    type: null,
+    status: null,
+    statusMessage: null,
+    sent: false,
+    sentData: undefined,
+  };
+
   try {
     const sandboxRequire = createSandboxRequire(workerData.requireBasePath || process.cwd());
     const asyncRequire = createAsyncRequire(workerData.requireBasePath || process.cwd());
@@ -245,10 +254,30 @@ async function executeCode(payload) {
       throw error;
     };
 
+    // Build res object with type, status, send, throws methods
+    const res = {
+      type: (contentType) => {
+        responseMetadata.type = contentType;
+        return res;
+      },
+      status: (code, message) => {
+        responseMetadata.status = code;
+        if (message) responseMetadata.statusMessage = message;
+        return res;
+      },
+      send: (data) => {
+        responseMetadata.sent = true;
+        responseMetadata.sentData = data;
+        return data;
+      },
+      throws: throws,
+    };
+
     const sandboxGlobals = {
       context: {
         ...context,
         req,
+        res,
         query: req.query,
         headers: req.headers,
         params: req.params || {},
@@ -261,6 +290,8 @@ async function executeCode(payload) {
         isAuthenticated: context.isAuthenticated,
         ...bridgeContext,
         throws,
+        // Also expose status method at context level for convenience
+        status: res.status,
       },
 
       // ===== Module System =====
@@ -437,11 +468,23 @@ async function executeCode(payload) {
     const script = new vm.Script(wrappedCode, { filename: 'sandbox:' + namespace });
     const result = await script.runInContext(vmContext, { timeout, breakOnSigint: true });
 
-    return { success: true, data: result, executionTime: Date.now() - startTime };
+    // Use sent data if res.send() was called, otherwise use return value
+    const finalData = responseMetadata.sent ? responseMetadata.sentData : result;
+
+    return {
+      success: true,
+      data: finalData,
+      executionTime: Date.now() - startTime,
+      responseMetadata: {
+        type: responseMetadata.type,
+        status: responseMetadata.status,
+        statusMessage: responseMetadata.statusMessage,
+      },
+    };
   } catch (error) {
     return {
       success: false,
-      error: { name: error.name || 'Error', message: error.message || 'Unknown error', stack: error.stack },
+      error: { name: error.name || 'Error', message: error.message || 'Unknown error', stack: error.stack, status: error.status },
       executionTime: Date.now() - startTime,
     };
   } finally {

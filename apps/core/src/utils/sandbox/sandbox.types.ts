@@ -17,6 +17,12 @@ export interface SandboxContext {
   }
 }
 
+export interface ResponseMetadata {
+  type?: string | null
+  status?: number | null
+  statusMessage?: string | null
+}
+
 export interface SandboxResult<T = unknown> {
   success: boolean
   data?: T
@@ -24,8 +30,10 @@ export interface SandboxResult<T = unknown> {
     name: string
     message: string
     stack?: string
+    status?: number
   }
   executionTime: number
+  responseMetadata?: ResponseMetadata
 }
 
 export enum WorkerMessageType {
