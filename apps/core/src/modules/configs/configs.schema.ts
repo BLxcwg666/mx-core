@@ -154,6 +154,35 @@ export const ImageBedOptionsSchema = section('图床设置', {
 export class ImageBedOptionsDto extends createZodDto(ImageBedOptionsSchema) {}
 export type ImageBedOptionsConfig = z.infer<typeof ImageBedOptionsSchema>
 
+// ==================== Image Storage Options ====================
+export const ImageStorageOptionsSchema = section('图片存储同步设置', {
+  enable: field.toggle(z.boolean().optional(), '启用图片同步到 S3', {
+    description: '启用后，发布文章时将本地图片同步到 S3',
+  }),
+  syncOnPublish: field.toggle(z.boolean().optional(), '发布时自动同步', {
+    description: '发布文章时自动将引用的本地图片上传到 S3',
+  }),
+  deleteLocalAfterSync: field.toggle(
+    z.boolean().optional(),
+    '同步后删除本地文件',
+  ),
+  endpoint: field.plain(z.string().optional(), 'S3 端点'),
+  secretId: field.halfGrid(z.string().optional(), 'Access Key ID'),
+  secretKey: field.passwordHalfGrid(z.string().optional(), 'Secret Access Key'),
+  bucket: field.halfGrid(z.string().optional(), 'Bucket 名称'),
+  region: field.halfGrid(z.string().optional(), '地域 Region'),
+  customDomain: field.plain(z.string().optional(), '自定义域名'),
+  prefix: field.plain(z.string().optional(), '路径前缀', {
+    description: '上传文件的路径前缀，如 images/',
+  }),
+})
+export class ImageStorageOptionsDto extends createZodDto(
+  ImageStorageOptionsSchema,
+) {}
+export type ImageStorageOptionsConfig = z.infer<
+  typeof ImageStorageOptionsSchema
+>
+
 // ==================== Baidu Search Options ====================
 export const BaiduSearchOptionsSchema = section('百度推送设定', {
   enable: field.toggle(z.boolean().optional(), '开启推送'),
@@ -442,6 +471,7 @@ export const configSchemaMapping = {
   s3Options: S3OptionsSchema,
   backupOptions: BackupOptionsSchema,
   imageBedOptions: ImageBedOptionsSchema,
+  imageStorageOptions: ImageStorageOptionsSchema,
   baiduSearchOptions: BaiduSearchOptionsSchema,
   bingSearchOptions: BingSearchOptionsSchema,
   algoliaSearchOptions: AlgoliaSearchOptionsSchema,
@@ -470,6 +500,7 @@ export const FullConfigSchema = withMeta(
     s3Options: S3OptionsSchema,
     backupOptions: BackupOptionsSchema,
     imageBedOptions: ImageBedOptionsSchema,
+    imageStorageOptions: ImageStorageOptionsSchema,
     baiduSearchOptions: BaiduSearchOptionsSchema,
     bingSearchOptions: BingSearchOptionsSchema,
     algoliaSearchOptions: AlgoliaSearchOptionsSchema,

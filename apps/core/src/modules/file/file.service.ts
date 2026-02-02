@@ -11,6 +11,7 @@ import {
 import path, { resolve } from 'node:path'
 import type { Readable } from 'node:stream'
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,

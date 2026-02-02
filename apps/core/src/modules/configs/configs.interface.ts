@@ -13,6 +13,7 @@ import {
   type FeatureListSchema,
   type FriendLinkOptionsSchema,
   type ImageBedOptionsSchema,
+  type ImageStorageOptionsSchema,
   type MailOptionsSchema,
   type MeiliSearchOptionsSchema,
   type OAuthSchema,
@@ -44,6 +45,7 @@ export abstract class IConfig {
   s3Options: Required<z.infer<typeof S3OptionsSchema>>
   backupOptions: Required<z.infer<typeof BackupOptionsSchema>>
   imageBedOptions: Required<z.infer<typeof ImageBedOptionsSchema>>
+  imageStorageOptions: Required<z.infer<typeof ImageStorageOptionsSchema>>
   baiduSearchOptions: Required<z.infer<typeof BaiduSearchOptionsSchema>>
   bingSearchOptions: Required<z.infer<typeof BingSearchOptionsSchema>>
   algoliaSearchOptions: Required<z.infer<typeof AlgoliaSearchOptionsSchema>>

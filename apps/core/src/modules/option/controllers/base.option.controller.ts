@@ -42,7 +42,7 @@ export class BaseOptionController {
         `key must be IConfigKeys, got ${key}`,
       )
     }
-    const value = await this.configsService.getForResponse(key)
+    const value = await this.configsService.get(key)
     if (!value) {
       throw new BizException(ErrorCodeEnum.ConfigNotFound)
     }
