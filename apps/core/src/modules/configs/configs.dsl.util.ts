@@ -98,7 +98,6 @@ const groupConfigs: GroupConfig[] = [
     sectionKeys: [
       'baiduSearchOptions',
       'bingSearchOptions',
-      'algoliaSearchOptions',
       'meiliSearchOptions',
     ],
   },
@@ -107,12 +106,7 @@ const groupConfigs: GroupConfig[] = [
     title: '存储',
     description: 'S3 对象存储、备份、图床',
     icon: 'database',
-    sectionKeys: [
-      's3Options',
-      'backupOptions',
-      'imageBedOptions',
-      'imageStorageOptions',
-    ],
+    sectionKeys: ['s3Options', 'backupOptions', 'imageBedOptions'],
   },
   {
     key: 'ai',
