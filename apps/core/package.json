@@ -1,6 +1,6 @@
 {
   "name": "@mx-space/core",
-  "version": "9.5.0",
+  "version": "9.6.1",
   "type": "module",
   "private": true,
   "engines": {
@@ -125,6 +125,7 @@
     "reflect-metadata": "0.2.2",
     "remove-markdown": "0.6.3",
     "remove-md-codeblock": "0.0.4",
+    "resend": "^6.9.1",
     "rxjs": "7.8.2",
     "semver": "7.7.3",
     "slugify": "1.6.6",
