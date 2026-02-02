@@ -66,6 +66,7 @@ import { GatewayModule } from './processors/gateway/gateway.module'
 import { HelperModule } from './processors/helper/helper.module'
 import { MeiliSearchModule } from './processors/meili/meili.module'
 import { RedisModule } from './processors/redis/redis.module'
+import { TaskQueueModule } from './processors/task-queue/task-queue.module'
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { RedisModule } from './processors/redis/redis.module'
     DatabaseModule,
     RedisModule,
     MeiliSearchModule,
+    TaskQueueModule,
 
     // biz module
     AiModule,

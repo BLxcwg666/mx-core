@@ -1,11 +1,12 @@
 import {
-  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common'
 import type { ReturnModelType } from '@typegoose/typegoose'
+import { BizException } from '~/common/exceptions/biz.exception'
 import { CollectionRefTypes } from '~/constants/db.constant'
+import { ErrorCodeEnum } from '~/constants/error-code.constant'
 import { DatabaseService } from '~/processors/database/database.service'
 import { AssetService } from '~/processors/helper/helper.asset.service'
 import { TextMacroService } from '~/processors/helper/helper.macro.service'
@@ -24,6 +25,8 @@ import { markdownToHtml } from './markdown.util'
 
 @Injectable()
 export class MarkdownService {
+  private readonly logger = new Logger(MarkdownService.name)
+
   constructor(
     private readonly assetService: AssetService,
 
@@ -108,7 +111,7 @@ export class MarkdownService {
     return await this.postModel
       .insertMany(models, { ordered: false })
       .catch(() => {
-        Logger.log('一篇文章导入失败', MarkdownService.name)
+        this.logger.warn('一篇文章导入失败')
       })
   }
 
@@ -225,7 +228,7 @@ ${text.trim()}
     const result = await this.databaseService.findGlobalById(id)
 
     if (!result || result.type === CollectionRefTypes.Recently)
-      throw new BadRequestException('文档不存在')
+      throw new BizException(ErrorCodeEnum.DocumentNotFound)
 
     return {
       html: this.renderMarkdownContent(

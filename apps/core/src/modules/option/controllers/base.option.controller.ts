@@ -1,12 +1,7 @@
-import {
-  BadRequestException,
-  Body,
-  Get,
-  Param,
-  Patch,
-  UnprocessableEntityException,
-} from '@nestjs/common'
+import { Body, Get, Param, Patch } from '@nestjs/common'
 import { HTTPDecorators } from '~/common/decorators/http.decorator'
+import { BizException } from '~/common/exceptions/biz.exception'
+import { ErrorCodeEnum } from '~/constants/error-code.constant'
 import {
   attachAiProviderOptionsToFormDSL,
   generateFormDSL,
@@ -42,13 +37,14 @@ export class BaseOptionController {
   @Get('/:key')
   async getOptionKey(@Param('key') key: keyof IConfig) {
     if (typeof key !== 'string' && !key) {
-      throw new UnprocessableEntityException(
+      throw new BizException(
+        ErrorCodeEnum.InvalidParameter,
         `key must be IConfigKeys, got ${key}`,
       )
     }
-    const value = await this.configsService.get(key)
+    const value = await this.configsService.getForResponse(key)
     if (!value) {
-      throw new BadRequestException('key is not exists.')
+      throw new BizException(ErrorCodeEnum.ConfigNotFound)
     }
     return { data: JSON.parse(JSON.stringify(value)) }
   }
@@ -60,7 +56,7 @@ export class BaseOptionController {
     @Body() body: Record<string, any>,
   ) {
     if (typeof body !== 'object') {
-      throw new UnprocessableEntityException('body must be object')
+      throw new BizException(ErrorCodeEnum.InvalidBody)
     }
     const result = await this.configsService.patchAndValid(key, body)
     return JSON.parse(JSON.stringify(result))

@@ -1,6 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { generateObject } from 'ai'
-import { z } from 'zod'
 import { AI_FALLBACK_SLUG_MAX_LENGTH } from '../ai.constants'
 import { AI_PROMPTS } from '../ai.prompts'
 import { AiService } from '../ai.service'
@@ -23,27 +21,16 @@ export class AiWriterService {
   }
 
   async generateTitleAndSlugByOpenAI(text: string) {
-    const model = await this.aiService.getWriterModel()
+    const runtime = await this.aiService.getWriterModel()
 
     try {
-      const { object } = await generateObject({
-        model: model as Parameters<typeof generateObject>[0]['model'],
-        schema: z.object({
-          title: z
-            .string()
-            .describe(AI_PROMPTS.writer.titleAndSlug.schema.title),
-          slug: z.string().describe(AI_PROMPTS.writer.titleAndSlug.schema.slug),
-          lang: z.string().describe(AI_PROMPTS.writer.titleAndSlug.schema.lang),
-          keywords: z
-            .array(z.string())
-            .describe(AI_PROMPTS.writer.titleAndSlug.schema.keywords),
-        }),
-        prompt: AI_PROMPTS.writer.titleAndSlug.prompt(text),
+      const { output } = await runtime.generateStructured({
+        ...AI_PROMPTS.writer.titleAndSlug(text),
         temperature: 0.3,
         maxRetries: 2,
       })
 
-      return object
+      return output
     } catch (error) {
       this.logger.error(
         `Failed to generate title and slug: ${error.message}`,
@@ -64,20 +51,16 @@ export class AiWriterService {
   }
 
   async generateSlugByTitleViaOpenAI(title: string) {
-    const model = await this.aiService.getWriterModel()
+    const runtime = await this.aiService.getWriterModel()
 
     try {
-      const { object } = await generateObject({
-        model: model as Parameters<typeof generateObject>[0]['model'],
-        schema: z.object({
-          slug: z.string().describe(AI_PROMPTS.writer.slug.schema.slug),
-        }),
-        prompt: AI_PROMPTS.writer.slug.prompt(title),
+      const { output } = await runtime.generateStructured({
+        ...AI_PROMPTS.writer.slug(title),
         temperature: 0.3,
         maxRetries: 2,
       })
 
-      return object
+      return output
     } catch (error) {
       this.logger.error(
         `Failed to generate slug from title: ${error.message}`,

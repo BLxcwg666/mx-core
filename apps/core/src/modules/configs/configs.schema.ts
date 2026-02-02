@@ -34,11 +34,7 @@ const MailOptionSchema = z.object({
     { 'ui:options': { halfGrid: true } },
   ),
   host: field.halfGrid(
-    z
-      .string()
-      .url({ message: 'host must be a valid URL' })
-      .optional()
-      .or(z.literal('')),
+    z.url({ message: 'host must be a valid URL' }).optional().or(z.literal('')),
     'SMTP 主机',
   ),
   secure: field.toggle(z.boolean().optional(), '使用 SSL/TLS'),
@@ -46,7 +42,7 @@ const MailOptionSchema = z.object({
 
 export const MailOptionsSchema = section('邮件通知设置', {
   enable: field.toggle(z.boolean().optional(), '开启邮箱提醒'),
-  from: field.halfGrid(z.string().email().optional(), '发件邮箱地址'),
+  from: field.halfGrid(z.email().optional(), '发件邮箱地址'),
   user: field.halfGrid(z.string().optional(), 'SMTP 用户名'),
   pass: field.passwordHalfGrid(z.string().min(1).optional(), 'SMTP 密码'),
   options: withMeta(MailOptionSchema.optional(), {
@@ -82,7 +78,7 @@ export const CommentOptionsSchema = section('评论设置', {
   }),
   spamKeywords: field.array(z.array(z.string()).optional(), '自定义屏蔽关键词'),
   blockIps: field.array(
-    z.array(z.union([z.string().ipv4(), z.string().ipv6()])).optional(),
+    z.array(z.union([z.ipv4(), z.ipv6()])).optional(),
     '自定义屏蔽 IP',
   ),
   disableNoChinese: field.toggle(z.boolean().optional(), '禁止非中文评论'),
@@ -269,7 +265,7 @@ export type TextOptionsConfig = z.infer<typeof TextOptionsSchema>
 // ==================== Bark Options ====================
 export const BarkOptionsSchema = section('Bark 通知设定', {
   enable: field.toggle(z.boolean().optional(), '开启 Bark 通知'),
-  key: field.plain(z.string().optional(), '设备 Key'),
+  key: field.password(z.string().optional(), '设备 Key'),
   serverUrl: field.plain(z.string().url().optional(), '服务器 URL', {
     description: '如果不填写，则使用默认的服务器，https://day.app',
   }),
@@ -294,9 +290,6 @@ export type FeatureListConfig = z.infer<typeof FeatureListSchema>
 
 // ==================== Third Party Service Integration ====================
 export const ThirdPartyServiceIntegrationSchema = section('第三方服务信息', {
-  xLogSiteId: field.plain(z.string().optional(), 'xLog SiteId', {
-    description: '文章发布同步到 [xLog](https://xlog.app)',
-  }),
   githubToken: field.password(z.string().optional(), 'GitHub Token', {
     description:
       '用于调用 GitHub API，获取仓库信息等；可选参数，如果没有遇到限流问题，可以不填写',
@@ -388,6 +381,29 @@ export const AISchema = section('AI 设定', {
         '生成的摘要目标语言，默认为 `auto`，根据用户的语言自动选择；如果需要固定语言，请填写 [ISO 639-1 语言代码](https://www.w3schools.com/tags/ref_language_codes.asp)',
     },
   ),
+  translationModel: field.plain(
+    AIModelAssignmentSchema.optional(),
+    '翻译功能模型',
+  ),
+  enableTranslation: field.toggle(z.boolean().optional(), '可调用 AI 翻译', {
+    description: '是否开启调用 AI 去生成翻译',
+  }),
+  enableAutoGenerateTranslation: field.toggle(
+    z.boolean().optional(),
+    '开启 AI 翻译自动生成',
+    {
+      description:
+        '此选项开启后，将会在文章发布后自动生成翻译，需要开启上面的选项，否则无效',
+    },
+  ),
+  translationTargetLanguages: field.array(
+    z.array(z.string()).optional(),
+    'AI 翻译目标语言列表',
+    {
+      description:
+        '自动生成翻译的目标语言列表，使用 [ISO 639-1 语言代码](https://www.w3schools.com/tags/ref_language_codes.asp)，如 ["en", "ja", "ko"]',
+    },
+  ),
 })
 export class AIDto extends createZodDto(AISchema) {}
 export type AIConfig = z.infer<typeof AISchema>
@@ -402,7 +418,10 @@ export const OAuthSchema = section(
   'OAuth',
   {
     providers: z.array(OAuthProviderSchema).optional(),
-    secrets: z.record(z.string(), z.record(z.string(), z.string())).optional(),
+    secrets: withMeta(
+      z.record(z.string(), z.record(z.string(), z.string())).optional(),
+      { encrypt: true },
+    ),
     public: z.record(z.string(), z.record(z.string(), z.string())).optional(),
   },
   { 'ui:options': { type: 'hidden' } },

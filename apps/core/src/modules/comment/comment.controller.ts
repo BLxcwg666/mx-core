@@ -1,7 +1,6 @@
 import {
   Body,
   Delete,
-  ForbiddenException,
   forwardRef,
   Get,
   Inject,
@@ -44,6 +43,8 @@ import { CommentFilterEmailInterceptor } from './comment.interceptor'
 import type { CommentModel } from './comment.model'
 import { CommentState } from './comment.model'
 import {
+  BatchCommentDeleteDto,
+  BatchCommentStateDto,
   CommentDto,
   CommentRefTypesDto,
   CommentStatePatchDto,
@@ -232,7 +233,7 @@ export class CommentController {
       !(await this.commentService.allowComment(id, ref)) &&
       !isAuthenticated
     ) {
-      throw new ForbiddenException('主人禁止了评论')
+      throw new BizException(ErrorCodeEnum.CommentForbidden)
     }
 
     const model: Partial<CommentModel> = { ...body, ...ipLocation }
@@ -454,6 +455,50 @@ export class CommentController {
     return
   }
 
+  @Patch('/batch/state')
+  @Auth()
+  async batchUpdateState(@Body() body: BatchCommentStateDto) {
+    const { ids, all, state, currentState } = body
+
+    if (all) {
+      const filter: Record<string, any> = {}
+      if (!isUndefined(currentState)) {
+        filter.state = currentState
+      }
+      await this.commentService.model.updateMany(filter, { state })
+    } else if (ids?.length) {
+      await this.commentService.model.updateMany(
+        { _id: { $in: ids } },
+        { state },
+      )
+    }
+
+    return
+  }
+
+  @Delete('/batch')
+  @Auth()
+  async batchDelete(@Body() body: BatchCommentDeleteDto) {
+    const { ids, all, state } = body
+
+    if (all) {
+      const filter: Record<string, any> = {}
+      if (!isUndefined(state)) {
+        filter.state = state
+      }
+      const comments = await this.commentService.model.find(filter).lean()
+      for (const comment of comments) {
+        await this.commentService.deleteComments(comment._id.toString())
+      }
+    } else if (ids?.length) {
+      for (const id of ids) {
+        await this.commentService.deleteComments(id)
+      }
+    }
+
+    return
+  }
+
   @Patch('/edit/:id')
   async editComment(
     @Param() params: MongoIdDto,
@@ -468,7 +513,7 @@ export class CommentController {
       throw new CannotFindException()
     }
     if (comment.readerId !== readerId && !isAuthenticated) {
-      throw new ForbiddenException()
+      throw new BizException(ErrorCodeEnum.CommentForbidden)
     }
     await this.commentService.editComment(id, text)
   }

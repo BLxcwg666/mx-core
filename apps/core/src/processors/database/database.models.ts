@@ -1,11 +1,13 @@
 import { ActivityModel } from '~/modules/activity/activity.model'
 import { AISummaryModel } from '~/modules/ai/ai-summary/ai-summary.model'
+import { AITranslationModel } from '~/modules/ai/ai-translation/ai-translation.model'
 import { AnalyzeModel } from '~/modules/analyze/analyze.model'
 import { AuthnModel } from '~/modules/authn/authn.model'
 import { CategoryModel } from '~/modules/category/category.model'
 import { CommentModel } from '~/modules/comment/comment.model'
 import { OptionModel } from '~/modules/configs/configs.model'
 import { DraftModel } from '~/modules/draft/draft.model'
+import { FileReferenceModel } from '~/modules/file/file-reference.model'
 import { LinkModel } from '~/modules/link/link.model'
 import { MetaPresetModel } from '~/modules/meta-preset/meta-preset.model'
 import { NoteModel } from '~/modules/note/note.model'
@@ -28,11 +30,13 @@ import { getProviderByTypegooseClass } from '~/transformers/model.transformer'
 export const databaseModels = [
   ActivityModel,
   AISummaryModel,
+  AITranslationModel,
   AnalyzeModel,
   AuthnModel,
   CategoryModel,
   CommentModel,
   DraftModel,
+  FileReferenceModel,
   LinkModel,
   MetaPresetModel,
   NoteModel,

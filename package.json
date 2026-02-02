@@ -1,6 +1,6 @@
 {
   "private": true,
-  "packageManager": "pnpm@10.10.0+sha512.d615db246fe70f25dcfea6d8d73dee782ce23e2245e3c4f6f888249fb568149318637dca73c2c5c8ef2a4ca0d5657fb9567188bfab47f566d1ee6ce987815c39",
+  "packageManager": "pnpm@10.28.2",
   "engines": {
     "node": ">=22"
   },
@@ -24,33 +24,32 @@
   "devDependencies": {
     "@ianvs/prettier-plugin-sort-imports": "4.7.0",
     "@sxzz/eslint-config": "7.1.4",
-    "@types/node": "25.0.9",
+    "@types/node": "25.0.10",
     "cross-env": "10.1.0",
     "eslint": "^9.36.0",
     "lint-staged": "16.2.7",
     "mongodb-memory-server": "11.0.1",
-    "prettier": "3.8.0",
+    "prettier": "3.8.1",
     "prettier-package-json": "2.8.0",
-    "prettier-plugin-ember-template-tag": "2.1.2",
+    "prettier-plugin-ember-template-tag": "2.1.3",
     "redis-memory-server": "0.15.0",
     "rimraf": "6.1.2",
-    "rolldown": "1.0.0-beta.60",
+    "rolldown": "1.0.0-rc.2",
     "simple-git-hooks": "2.13.1",
     "ts-node": "10.9.2",
     "tsconfig-paths": "4.2.0",
     "typescript": "5.9.3",
-    "vite-tsconfig-paths": "6.0.4",
-    "zx": "8.8.5"
+    "vite-tsconfig-paths": "6.0.5"
   },
   "resolutions": {
-    "rolldown": "1.0.0-beta.60",
+    "rolldown": "1.0.0-rc.2",
     "get-pixels@^3>request": "./external/request",
     "mongodb": "6.12.0",
     "pino": "./external/pino",
     "semver": "7.7.3",
     "typescript": "5.9.3",
     "whatwg-url": "14.1.1",
-    "zod": "4.3.5"
+    "zod": "4.3.6"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged"

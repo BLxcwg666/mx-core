@@ -3,6 +3,8 @@ import { BizException } from '~/common/exceptions/biz.exception'
 import { NoContentCanBeModifiedException } from '~/common/exceptions/no-content-canbe-modified.exception'
 import { BusinessEvents, EventScope } from '~/constants/business-event.constant'
 import { ErrorCodeEnum } from '~/constants/error-code.constant'
+import { FileReferenceType } from '~/modules/file/file-reference.model'
+import { FileReferenceService } from '~/modules/file/file-reference.service'
 import { EventManagerService } from '~/processors/helper/helper.event.service'
 import { ImageService } from '~/processors/helper/helper.image.service'
 import { TextMacroService } from '~/processors/helper/helper.macro.service'
@@ -12,6 +14,7 @@ import { scheduleManager } from '~/utils/schedule.util'
 import { isDefined } from '~/utils/validator.util'
 import { omit } from 'es-toolkit/compat'
 import slugify from 'slugify'
+import { DraftRefType } from '../draft/draft.model'
 import { DraftService } from '../draft/draft.service'
 import { PageModel } from './page.model'
 
@@ -21,6 +24,7 @@ export class PageService {
     @InjectModel(PageModel)
     private readonly pageModel: MongooseModel<PageModel>,
     private readonly imageService: ImageService,
+    private readonly fileReferenceService: FileReferenceService,
     private readonly eventManager: EventManagerService,
     private readonly macroService: TextMacroService,
     @Inject(forwardRef(() => DraftService))
@@ -52,21 +56,35 @@ export class PageService {
 
     // 处理草稿：标记为已发布，并关联到新创建的页面
     if (draftId) {
+      // Release draft's file references first, they will be re-associated to the page
+      await this.fileReferenceService.removeReferencesForDocument(
+        draftId,
+        FileReferenceType.Draft,
+      )
       await this.draftService.linkToPublished(draftId, res.id)
       await this.draftService.markAsPublished(draftId)
     }
 
-    this.imageService.saveImageDimensionsFromMarkdownText(
-      doc.text,
-      res.images,
-      async (images) => {
-        res.images = images
-        await res.save()
-        this.eventManager.broadcast(BusinessEvents.PAGE_UPDATE, res, {
-          scope: EventScope.TO_SYSTEM,
-        })
-      },
-    )
+    scheduleManager.schedule(async () => {
+      // Track file references
+      await this.fileReferenceService.activateReferences(
+        res.text,
+        res.id,
+        FileReferenceType.Page,
+      )
+
+      this.imageService.saveImageDimensionsFromMarkdownText(
+        res.text,
+        res.images,
+        async (images) => {
+          res.images = images
+          await res.save()
+          this.eventManager.broadcast(BusinessEvents.PAGE_UPDATE, res, {
+            scope: EventScope.TO_SYSTEM,
+          })
+        },
+      )
+    })
 
     this.eventManager.broadcast(BusinessEvents.PAGE_CREATE, res, {
       scope: EventScope.TO_SYSTEM,
@@ -111,6 +129,13 @@ export class PageService {
     }
 
     scheduleManager.schedule(async () => {
+      // Update file references
+      await this.fileReferenceService.updateReferencesForDocument(
+        newDoc.text,
+        newDoc.id,
+        FileReferenceType.Page,
+      )
+
       await Promise.all([
         this.imageService.saveImageDimensionsFromMarkdownText(
           newDoc.text,
@@ -139,9 +164,16 @@ export class PageService {
   }
 
   async deleteById(id: string) {
-    await this.model.deleteOne({
-      _id: id,
-    })
+    await Promise.all([
+      this.model.deleteOne({
+        _id: id,
+      }),
+      this.draftService.deleteByRef(DraftRefType.Page, id),
+      this.fileReferenceService.removeReferencesForDocument(
+        id,
+        FileReferenceType.Page,
+      ),
+    ])
     this.eventManager.broadcast(BusinessEvents.PAGE_DELETE, id, {
       scope: EventScope.ALL,
     })

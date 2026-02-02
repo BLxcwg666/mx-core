@@ -1,19 +1,14 @@
-import { statSync } from 'node:fs'
-import { readdir, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { rm } from 'node:fs/promises'
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common'
 import { CronExpression } from '@nestjs/schedule'
 import { CronDescription } from '~/common/decorators/cron-description.decorator'
 import { CronOnce } from '~/common/decorators/cron-once.decorator'
 import { RedisKeys } from '~/constants/cache.constant'
-import {
-  LOG_DIR,
-  STATIC_FILE_TRASH_DIR,
-  TEMP_DIR,
-} from '~/constants/path.constant'
+import { STATIC_FILE_TRASH_DIR, TEMP_DIR } from '~/constants/path.constant'
 import { AggregateService } from '~/modules/aggregate/aggregate.service'
 import { AnalyzeModel } from '~/modules/analyze/analyze.model'
 import { ConfigsService } from '~/modules/configs/configs.service'
+import { FileReferenceService } from '~/modules/file/file-reference.service'
 import { InjectModel } from '~/transformers/model.transformer'
 import { getRedisKey } from '~/utils/redis.util'
 import dayjs from 'dayjs'
@@ -32,6 +27,7 @@ export class CronService {
     @InjectModel(AnalyzeModel)
     private readonly analyzeModel: MongooseModel<AnalyzeModel>,
     private readonly redisService: RedisService,
+    private readonly fileReferenceService: FileReferenceService,
 
     @Inject(forwardRef(() => AggregateService))
     private readonly aggregateService: AggregateService,
@@ -93,26 +89,6 @@ export class CronService {
     await rm(TEMP_DIR, { recursive: true })
     mkdirp.sync(STATIC_FILE_TRASH_DIR)
     this.logger.log('--> 清理临时文件成功')
-  }
-  // “At 00:05.”
-  @CronOnce('5 0 * * *', { name: 'cleanTempDirectory' })
-  @CronDescription('清理日志文件')
-  async cleanLogFile() {
-    const files = (await readdir(LOG_DIR)).filter(
-      (file) => file !== 'error.log',
-    )
-    const rmTaskArr = [] as Promise<any>[]
-    for (const file of files) {
-      const filePath = join(LOG_DIR, file)
-      const state = statSync(filePath)
-      const oldThanWeek = dayjs().diff(state.mtime, 'day') > 7
-      if (oldThanWeek) {
-        rmTaskArr.push(rm(filePath))
-      }
-    }
-
-    await Promise.all(rmTaskArr)
-    this.logger.log('--> 清理日志文件成功')
   }
 
   @CronOnce(CronExpression.EVERY_DAY_AT_1AM, { name: 'pushToBaiduSearch' })
@@ -242,5 +218,18 @@ export class CronService {
     )
 
     this.logger.log(`--> 删除了 ${deleteCount} 个过期的 token`)
+  }
+
+  @CronDescription('清理孤儿图片')
+  @CronOnce(CronExpression.EVERY_HOUR, {
+    name: 'cleanupOrphanImages',
+  })
+  async cleanupOrphanImages() {
+    this.logger.log('--> 开始清理孤儿图片')
+    const { deletedCount, totalOrphan } =
+      await this.fileReferenceService.cleanupOrphanFiles(60)
+    this.logger.log(
+      `--> 清理孤儿图片完成：删除了 ${deletedCount}/${totalOrphan} 个文件`,
+    )
   }
 }

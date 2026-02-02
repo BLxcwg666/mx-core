@@ -10,7 +10,9 @@ import { OnEvent } from '@nestjs/event-emitter'
 import { CronExpression } from '@nestjs/schedule'
 import { CronDescription } from '~/common/decorators/cron-description.decorator'
 import { CronOnce } from '~/common/decorators/cron-once.decorator'
+import { BizException } from '~/common/exceptions/biz.exception'
 import { BusinessEvents } from '~/constants/business-event.constant'
+import { ErrorCodeEnum } from '~/constants/error-code.constant'
 import { EventBusEvents } from '~/constants/event-bus.constant'
 import { POST_SERVICE_TOKEN } from '~/constants/injection.constant'
 import type { SearchDto } from '~/modules/search/search.schema'
@@ -31,6 +33,11 @@ import { NoteService } from '../note/note.service'
 import { PageService } from '../page/page.service'
 import { PostModel } from '../post/post.model'
 import type { PostService } from '../post/post.service'
+import {
+  DEFAULT_ALGOLIA_MAX_SIZE_IN_BYTES,
+  SEARCH_TEXT_WEIGHT,
+  SEARCH_TITLE_WEIGHT,
+} from './search.constants'
 
 const SEARCH_CACHE_PREFIX = 'search:'
 
@@ -56,57 +63,54 @@ export class SearchService {
   async searchNote(searchOption: SearchDto, showHidden: boolean) {
     const { keyword, page, size } = searchOption
     const select = '_id title created modified nid'
+    const keywordArr = this.buildSearchKeywordRegexes(keyword)
 
-    const keywordArr = keyword
-      .split(/\s+/)
-      .map((item) => new RegExp(String(item), 'gi'))
-
-    return transformDataToPaginate(
-      await this.noteService.model.paginate(
-        {
-          $or: [{ title: { $in: keywordArr } }, { text: { $in: keywordArr } }],
-          $and: [
-            {
-              $or: [
-                { password: undefined },
-                { password: null },
-                { password: { $exists: false } },
-              ],
-            },
-            { isPublished: { $in: showHidden ? [false, true] : [true] } },
-            {
-              $or: [
-                { publicAt: { $not: null } },
-                { publicAt: { $lte: new Date() } },
-              ],
-            },
-          ],
-        },
-        {
-          limit: size,
-          page,
-          select,
-        },
-      ),
+    const result = await this.noteService.model.paginate(
+      {
+        $or: [{ title: { $in: keywordArr } }, { text: { $in: keywordArr } }],
+        $and: [
+          {
+            $or: [
+              { password: undefined },
+              { password: null },
+              { password: { $exists: false } },
+            ],
+          },
+          { isPublished: { $in: showHidden ? [false, true] : [true] } },
+          {
+            $or: [
+              { publicAt: { $not: null } },
+              { publicAt: { $lte: new Date() } },
+            ],
+          },
+        ],
+      },
+      {
+        limit: size,
+        page,
+        select: `${select} text`,
+      },
     )
+    result.docs = this.applyWeightedSort(result.docs, keywordArr)
+    return transformDataToPaginate(result)
   }
 
   async searchPost(searchOption: SearchDto) {
     const { keyword, page, size } = searchOption
     const select = '_id title created modified categoryId slug'
-    const keywordArr = keyword
-      .split(/\s+/)
-      .map((item) => new RegExp(String(item), 'gi'))
-    return await this.postService.model.paginate(
+    const keywordArr = this.buildSearchKeywordRegexes(keyword)
+    const result = await this.postService.model.paginate(
       {
         $or: [{ title: { $in: keywordArr } }, { text: { $in: keywordArr } }],
       },
       {
         limit: size,
         page,
-        select,
+        select: `${select} text`,
       },
     )
+    result.docs = this.applyWeightedSort(result.docs, keywordArr)
+    return result
   }
 
   // MeiliSearch
@@ -411,14 +415,14 @@ export class SearchService {
   public async getAlgoliaSearchClient() {
     const { algoliaSearchOptions } = await this.configs.waitForConfigReady()
     if (!algoliaSearchOptions.enable) {
-      throw new BadRequestException('algolia not enable.')
+      throw new BizException(ErrorCodeEnum.AlgoliaNotEnabled)
     }
     if (
       !algoliaSearchOptions.appId ||
       !algoliaSearchOptions.apiKey ||
       !algoliaSearchOptions.indexName
     ) {
-      throw new BadRequestException('algolia not config.')
+      throw new BizException(ErrorCodeEnum.AlgoliaNotConfigured)
     }
     const client = algoliasearch(
       algoliaSearchOptions.appId,
@@ -529,7 +533,7 @@ export class SearchService {
 
       this.logger.log('--> 推送到 algoliasearch 成功')
     } catch (error) {
-      Logger.error('algolia 推送错误', 'AlgoliaSearch')
+      this.logger.error('algolia 推送错误')
       throw error
     }
   }
@@ -613,12 +617,66 @@ export class SearchService {
     const { client, indexName } = await this.getAlgoliaSearchClient()
     return caller({ client, indexName })
   }
+
+  private buildSearchKeywordRegexes(keyword: string) {
+    return keyword
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((item) => new RegExp(String(item), 'gi'))
+  }
+
+  private applyWeightedSort<T extends Record<string, any>>(
+    docs: T[],
+    keywordRegexes: RegExp[],
+  ) {
+    const normalized = docs.map((doc) =>
+      typeof (doc as any).toObject === 'function'
+        ? (doc as any).toObject()
+        : doc,
+    )
+
+    return normalized
+      .map((doc) => ({
+        ...doc,
+        __search_weight: this.calculateSearchWeight(doc, keywordRegexes),
+      }))
+      .sort((a, b) => {
+        if (a.__search_weight !== b.__search_weight) {
+          return b.__search_weight - a.__search_weight
+        }
+        const dateA = new Date(a.modified ?? a.created ?? 0).valueOf()
+        const dateB = new Date(b.modified ?? b.created ?? 0).valueOf()
+        return dateB - dateA
+      })
+      .map(({ __search_weight, text, ...rest }) => rest)
+  }
+
+  private calculateSearchWeight(
+    doc: { title?: string; text?: string },
+    keywordRegexes: RegExp[],
+  ) {
+    const title = doc.title ?? ''
+    const text = doc.text ?? ''
+    let score = 0
+    for (const keywordRegex of keywordRegexes) {
+      const titleMatches = this.countKeywordMatches(title, keywordRegex)
+      const textMatches = this.countKeywordMatches(text, keywordRegex)
+      score +=
+        titleMatches * SEARCH_TITLE_WEIGHT + textMatches * SEARCH_TEXT_WEIGHT
+    }
+    return score
+  }
+
+  private countKeywordMatches(text: string, keywordRegex: RegExp) {
+    if (!text) return 0
+    const safeRegex = new RegExp(keywordRegex.source, keywordRegex.flags)
+    return text.match(safeRegex)?.length ?? 0
+  }
 }
 
-const MAX_SIZE_IN_BYTES = 10_000
 function adjustObjectSizeEfficiently<T extends { text: string }>(
   originalObject: T,
-  maxSizeInBytes: number = MAX_SIZE_IN_BYTES,
+  maxSizeInBytes: number = DEFAULT_ALGOLIA_MAX_SIZE_IN_BYTES,
 ): any {
   // 克隆原始对象以避免修改引用
   const objectToAdjust = JSON.parse(JSON.stringify(originalObject))

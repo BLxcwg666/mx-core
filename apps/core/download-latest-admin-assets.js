@@ -1,4 +1,4 @@
-#!env node
+#!/usr/bin/env node
 import { execSync } from 'node:child_process'
 import {
   appendFileSync,
@@ -12,23 +12,19 @@ import { join } from 'node:path'
 
 const require = createRequire(import.meta.url)
 const {
-  dashboard: { repo, version },
+  dashboard: { repo },
 } = require('./package.json')
 
-const endpoint = `https://api.github.com/repos/${repo}/releases/tags/v${version}`
+const url = `https://github.com/${repo}/releases/latest/download/release.zip`
 ;(async () => {
-  const json = await fetch(endpoint).then((res) => res.json())
-  const downloadUrl = json.assets.find(
-    (asset) => asset.name === 'release.zip',
-  ).browser_download_url
-  const buffer = await fetch(downloadUrl).then((res) => res.arrayBuffer())
+  const buffer = await fetch(url).then((res) => res.arrayBuffer())
   const zipPath = join(process.cwd(), 'admin-release.zip')
   appendFileSync(zipPath, Buffer.from(buffer))
 
   const files = readdirSync(process.cwd())
   for (const file of files) {
     const stat = statSync(join(process.cwd(), file))
-    console.log(
+    console.info(
       `${stat.isDirectory() ? 'd' : '-'} ${file} (${stat.size} bytes)`,
     )
   }

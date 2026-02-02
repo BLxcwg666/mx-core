@@ -20,14 +20,46 @@ export class DraftHistoryModel {
   @prop({ required: true })
   title: string
 
-  @prop({ required: true })
-  text: string
+  /**
+   * 当 isFullSnapshot 为 true 时，存储完整文本
+   * 当 isFullSnapshot 为 false 时，存储相对于最近一个全量快照的 diff patches
+   */
+  @prop({
+    validate: {
+      validator(this: DraftHistoryModel, value: string | undefined) {
+        if (this.refVersion !== undefined) return true
+        return value !== undefined && value !== null
+      },
+      message: 'Path `text` is required.',
+    },
+  })
+  text?: string
 
   @prop({ type: String })
   typeSpecificData?: string
 
   @prop({ required: true })
   savedAt: Date
+
+  /**
+   * 是否为全量快照
+   * true: text 字段存储完整内容
+   * false: text 字段存储 diff patches (JSON 序列化)
+   */
+  @prop({ default: true })
+  isFullSnapshot: boolean
+
+  /**
+   * 指向最近的全量快照版本（用于无 diff 的去重）
+   */
+  @prop()
+  refVersion?: number
+
+  /**
+   * 当前版本基于哪个全量快照（用于前端展示引用关系）
+   */
+  @prop()
+  baseVersion?: number
 }
 
 @index({ refType: 1, refId: 1 }, { sparse: true })

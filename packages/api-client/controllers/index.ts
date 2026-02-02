@@ -5,8 +5,15 @@ import { AIController } from './ai'
 import { CategoryController } from './category'
 import { CommentController } from './comment'
 import { LinkController } from './link'
+import type {
+  NoteMiddleListOptions,
+  NoteTimelineItem,
+  NoteTopicListItem,
+  NoteTopicListOptions,
+} from './note'
 import { NoteController } from './note'
 import { PageController } from './page'
+import type { PostListItem, PostListOptions } from './post'
 import { PostController } from './post'
 import { ProjectController } from './project'
 import {
@@ -95,3 +102,11 @@ export {
   TopicController,
   UserController,
 }
+
+export type {
+  NoteMiddleListOptions,
+  NoteTimelineItem,
+  NoteTopicListItem,
+  NoteTopicListOptions,
+}
+export type { PostListItem, PostListOptions }

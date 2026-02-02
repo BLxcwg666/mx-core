@@ -64,6 +64,22 @@ export class S3Uploader {
     return `${path}/${objectKey}`
   }
 
+  getPublicUrl(objectKey: string): string {
+    if (this.customDomain && this.customDomain.length > 0) {
+      return `${this.customDomain.replace(/\/+$/, '')}/${objectKey}`
+    }
+    return `${this.endpoint}/${this.bucket}/${objectKey}`
+  }
+
+  async uploadBuffer(
+    buffer: Buffer,
+    objectKey: string,
+    contentType: string,
+  ): Promise<string> {
+    await this.uploadToS3(objectKey, buffer, contentType)
+    return this.getPublicUrl(objectKey)
+  }
+
   async uploadFile(
     fileData: Buffer,
     filename: string,
@@ -158,14 +174,16 @@ export class S3Uploader {
     // Create and send PUT request
     const requestUrl = `${this.endpoint}${canonicalUri}`
 
-    const response = await fetch(requestUrl, {
+    const fetchOptions: RequestInit & { dispatcher?: unknown } = {
       method: 'PUT',
       headers: {
         ...headers,
         Authorization: authorization,
       },
       body: new Uint8Array(fileData),
-    })
+    }
+
+    const response = await fetch(requestUrl, fetchOptions)
 
     if (!response.ok) {
       const errorText = await response.text()

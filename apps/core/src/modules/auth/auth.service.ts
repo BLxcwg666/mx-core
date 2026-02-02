@@ -1,12 +1,13 @@
 import { IncomingMessage } from 'node:http'
 import {
-  BadRequestException,
   Inject,
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common'
 import type { ReturnModelType } from '@typegoose/typegoose'
 import { RequestContext } from '~/common/contexts/request.context'
+import { BizException } from '~/common/exceptions/biz.exception'
+import { ErrorCodeEnum } from '~/constants/error-code.constant'
 import { alphabet } from '~/constants/other.constant'
 import type { TokenModel, UserModel } from '~/modules/user/user.model'
 import { UserModel as User } from '~/modules/user/user.model'
@@ -149,21 +150,31 @@ export class AuthService {
       headers: cookieHeader,
     })
 
+    if (!session) {
+      return null
+    }
+
     const accounts = await auth.api.listUserAccounts({
       headers: cookieHeader,
     })
 
-    if (!accounts) {
+    if (!accounts || accounts.length === 0) {
       return null
     }
 
-    const providerAccountId = accounts[0].accountId
-    const provider = accounts[0].providerId
+    const sessionProvider = (session as { session?: { provider?: string } })
+      .session?.provider
+    const matchedAccount = sessionProvider
+      ? accounts.find((account) => account.providerId === sessionProvider)
+      : undefined
+    const primaryAccount = matchedAccount || accounts[0]
+    const providerAccountId = primaryAccount.accountId || primaryAccount.id
+    const provider = primaryAccount.providerId
 
     return {
       ...session,
       providerAccountId,
-      provider,
+      provider: provider || sessionProvider,
       user: session?.user,
     }
   }
@@ -171,15 +182,15 @@ export class AuthService {
   async setCurrentOauthAsOwner() {
     const req = RequestContext.currentRequest()
     if (!req) {
-      throw new BadRequestException()
+      throw new BizException(ErrorCodeEnum.AuthFailed)
     }
     const session = await this.getSessionUser(req)
     if (!session) {
-      throw new BadRequestException('session not found')
+      throw new BizException(ErrorCodeEnum.AuthSessionNotFound)
     }
     const userId = session.user?.id
     if (!userId) {
-      throw new BadRequestException('user id not found')
+      throw new BizException(ErrorCodeEnum.AuthUserIdNotFound)
     }
     await this.databaseService.db.collection(AUTH_JS_USER_COLLECTION).updateOne(
       {

@@ -67,6 +67,18 @@ export const generateDefaultConfig: () => IConfig = () => ({
     allowedFormats: 'jpg,jpeg,png,gif,webp',
     maxSizeMB: 10,
   },
+  imageStorageOptions: {
+    enable: false,
+    syncOnPublish: false,
+    deleteLocalAfterSync: false,
+    endpoint: null!,
+    secretId: null!,
+    secretKey: null!,
+    bucket: null!,
+    region: 'auto',
+    customDomain: '',
+    prefix: '',
+  },
   baiduSearchOptions: { enable: false, token: null! },
   bingSearchOptions: { enable: false, token: null! },
   algoliaSearchOptions: {
@@ -94,7 +106,6 @@ export const generateDefaultConfig: () => IConfig = () => ({
     emailSubscribe: false,
   },
   thirdPartyServiceIntegration: {
-    xLogSiteId: '',
     githubToken: '',
   },
 

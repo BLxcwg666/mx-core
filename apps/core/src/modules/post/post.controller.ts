@@ -13,9 +13,14 @@ import { Auth } from '~/common/decorators/auth.decorator'
 import { HTTPDecorators, Paginator } from '~/common/decorators/http.decorator'
 import { IpLocation } from '~/common/decorators/ip.decorator'
 import type { IpRecord } from '~/common/decorators/ip.decorator'
+import { Lang } from '~/common/decorators/lang.decorator'
 import { IsAuthenticated } from '~/common/decorators/role.decorator'
 import { CannotFindException } from '~/common/exceptions/cant-find.exception'
 import { CountingService } from '~/processors/helper/helper.counting.service'
+import {
+  TranslationEnhancerService,
+  type ArticleTranslationInput,
+} from '~/processors/helper/helper.translation-enhancer.service'
 import { MongoIdDto } from '~/shared/dto/id.dto'
 import { addYearCondition } from '~/transformers/db-query.transformer'
 import type { PipelineStage } from 'mongoose'
@@ -24,6 +29,7 @@ import { PostModel } from './post.model'
 import {
   CategoryAndSlugDto,
   PartialPostDto,
+  PostDetailQueryDto,
   PostDto,
   PostPagerDto,
   SetPostPublishStatusDto,
@@ -35,6 +41,7 @@ export class PostController {
   constructor(
     private readonly postService: PostService,
     private readonly countingService: CountingService,
+    private readonly translationEnhancerService: TranslationEnhancerService,
   ) {}
 
   @Get('/')
@@ -42,6 +49,7 @@ export class PostController {
   async getPaginate(
     @Query() query: PostPagerDto,
     @IsAuthenticated() isAuthenticated: boolean,
+    @Lang() lang?: string,
   ) {
     const {
       size,
@@ -142,14 +150,55 @@ export class PostController {
           page,
         },
       )
-      .then((res) => {
-        res.docs = res.docs.map((doc: PostModel) => {
-          doc.text = truncate ? doc.text.slice(0, truncate) : doc.text
+      .then(async (res) => {
+        const translationInputs: ArticleTranslationInput[] = []
+        for (const doc of res.docs) {
+          const originalText = doc.text
           if (doc.meta && typeof doc.meta === 'string') {
             doc.meta = JSON.safeParse(doc.meta as string) || doc.meta
           }
-          return doc
-        })
+
+          if (lang && typeof originalText === 'string') {
+            translationInputs.push({
+              id: doc._id?.toString?.() ?? doc.id ?? String(doc._id),
+              title: doc.title,
+              text: originalText,
+              summary: doc.summary,
+              tags: doc.tags,
+              meta: doc.meta,
+              modified: doc.modified,
+            })
+          }
+
+          doc.text = truncate ? doc.text.slice(0, truncate) : doc.text
+        }
+
+        if (lang && translationInputs.length) {
+          const translationResults =
+            await this.translationEnhancerService.enhanceListWithTranslation({
+              articles: translationInputs,
+              targetLang: lang,
+            })
+
+          res.docs = res.docs.map((doc) => {
+            const docId = doc._id?.toString?.() ?? doc.id ?? String(doc._id)
+            const translation = translationResults.get(docId)
+            if (!translation?.isTranslated) {
+              return doc
+            }
+
+            return {
+              ...doc,
+              title: translation.title,
+              text: translation.text,
+              summary: translation.summary,
+              tags: translation.tags,
+              isTranslated: translation.isTranslated,
+              translationMeta: translation.translationMeta,
+            }
+          })
+        }
+
         return res
       })
   }
@@ -218,6 +267,7 @@ export class PostController {
         category: (last.category as CategoryModel).slug,
         slug: last.slug,
       },
+      {} as PostDetailQueryDto,
       ip,
       isAuthenticated,
     )
@@ -226,8 +276,10 @@ export class PostController {
   @Get('/:category/:slug')
   async getByCateAndSlug(
     @Param() params: CategoryAndSlugDto,
+    @Query() _query: PostDetailQueryDto,
     @IpLocation() { ip }: IpRecord,
     @IsAuthenticated() isAuthenticated?: boolean,
+    @Lang() lang?: string,
   ) {
     const { category, slug } = params
     const postDocument = await this.postService.getPostBySlug(
@@ -249,7 +301,31 @@ export class PostController {
       ip,
     )
 
-    return { ...postDocument.toObject(), liked }
+    const baseData = postDocument.toObject()
+    const translationResult =
+      await this.translationEnhancerService.enhanceWithTranslation({
+        articleId: postDocument.id,
+        targetLang: lang,
+        allowHidden: Boolean(isAuthenticated),
+        originalData: {
+          title: baseData.title,
+          text: baseData.text,
+          summary: baseData.summary,
+          tags: baseData.tags,
+        },
+      })
+
+    return {
+      ...baseData,
+      title: translationResult.title,
+      text: translationResult.text,
+      summary: translationResult.summary,
+      tags: translationResult.tags,
+      isTranslated: translationResult.isTranslated,
+      translationMeta: translationResult.translationMeta,
+      availableTranslations: translationResult.availableTranslations,
+      liked,
+    }
   }
 
   @Post('/')

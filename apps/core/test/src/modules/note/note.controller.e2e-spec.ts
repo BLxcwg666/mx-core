@@ -21,6 +21,11 @@ import { configProvider } from 'test/mock/modules/config.mock'
 import { gatewayProviders } from 'test/mock/modules/gateway.mock'
 import { countingServiceProvider } from 'test/mock/processors/counting.mock'
 import { eventEmitterProvider } from 'test/mock/processors/event.mock'
+import {
+  fileReferenceProvider,
+  imageMigrationProvider,
+} from 'test/mock/processors/file.mock'
+import { translationEnhancerProvider } from 'test/mock/processors/translation-enhancer.mock'
 import MockDbData from './note.e2e-mock.db'
 
 describe('NoteController (e2e)', async () => {
@@ -57,6 +62,9 @@ describe('NoteController (e2e)', async () => {
 
       countingServiceProvider,
       DraftService,
+      fileReferenceProvider,
+      imageMigrationProvider,
+      translationEnhancerProvider,
     ],
     imports: [],
     models: [NoteModel, OptionModel, UserModel, DraftModel],
@@ -168,6 +176,7 @@ describe('NoteController (e2e)', async () => {
 
     data.data.forEach((note) => {
       delete note.id
+      delete note.modified
     })
 
     expect(data).toMatchSnapshot()

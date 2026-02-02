@@ -5,6 +5,8 @@ import { NoContentCanBeModifiedException } from '~/common/exceptions/no-content-
 import { BusinessEvents, EventScope } from '~/constants/business-event.constant'
 import { CollectionRefTypes } from '~/constants/db.constant'
 import { EventBusEvents } from '~/constants/event-bus.constant'
+import { FileReferenceType } from '~/modules/file/file-reference.model'
+import { FileReferenceService } from '~/modules/file/file-reference.service'
 import { EventManagerService } from '~/processors/helper/helper.event.service'
 import { ImageService } from '~/processors/helper/helper.image.service'
 import { TextMacroService } from '~/processors/helper/helper.macro.service'
@@ -18,6 +20,7 @@ import { debounce, omit } from 'es-toolkit/compat'
 import type { PaginateOptions, QueryFilter } from 'mongoose'
 import { getArticleIdFromRoomName } from '../activity/activity.util'
 import { CommentService } from '../comment/comment.service'
+import { DraftRefType } from '../draft/draft.model'
 import { DraftService } from '../draft/draft.service'
 import { NoteModel } from './note.model'
 
@@ -27,6 +30,7 @@ export class NoteService {
     @InjectModel(NoteModel)
     private readonly noteModel: MongooseModel<NoteModel>,
     private readonly imageService: ImageService,
+    private readonly fileReferenceService: FileReferenceService,
     private readonly eventManager: EventManagerService,
     @Inject(forwardRef(() => CommentService))
     private readonly commentService: CommentService,
@@ -162,11 +166,23 @@ export class NoteService {
 
     // 处理草稿：标记为已发布，并关联到新创建的日记
     if (draftId) {
+      // Release draft's file references first, they will be re-associated to the note
+      await this.fileReferenceService.removeReferencesForDocument(
+        draftId,
+        FileReferenceType.Draft,
+      )
       await this.draftService.linkToPublished(draftId, note.id)
       await this.draftService.markAsPublished(draftId)
     }
 
     scheduleManager.schedule(async () => {
+      // Track file references
+      await this.fileReferenceService.activateReferences(
+        note.text,
+        note.id,
+        FileReferenceType.Note,
+      )
+
       await Promise.all([
         this.eventManager.emit(EventBusEvents.CleanAggregateCache, null, {
           scope: EventScope.TO_SYSTEM,
@@ -285,6 +301,13 @@ export class NoteService {
     }
 
     scheduleManager.schedule(async () => {
+      // Update file references
+      await this.fileReferenceService.updateReferencesForDocument(
+        updated.text,
+        updated.id,
+        FileReferenceType.Note,
+      )
+
       await Promise.all([
         this.eventManager.emit(EventBusEvents.CleanAggregateCache, null, {
           scope: EventScope.TO_SYSTEM,
@@ -366,6 +389,11 @@ export class NoteService {
         ref: id,
         refType: CollectionRefTypes.Note,
       }),
+      this.draftService.deleteByRef(DraftRefType.Note, id),
+      this.fileReferenceService.removeReferencesForDocument(
+        id,
+        FileReferenceType.Note,
+      ),
     ])
     scheduleManager.schedule(async () => {
       await Promise.all([
@@ -379,12 +407,6 @@ export class NoteService {
     })
   }
 
-  /**
-   * 查找 nid 时候正确，返回 _id
-   *
-   * @param {number} nid
-   * @returns {Types.ObjectId}
-   */
   async getIdByNid(nid: number) {
     const document = await this.model
       .findOne({

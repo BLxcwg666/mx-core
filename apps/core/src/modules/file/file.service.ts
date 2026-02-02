@@ -11,12 +11,12 @@ import {
 import path, { resolve } from 'node:path'
 import type { Readable } from 'node:stream'
 import {
-  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
-  NotFoundException,
 } from '@nestjs/common'
+import { BizException } from '~/common/exceptions/biz.exception'
+import { ErrorCodeEnum } from '~/constants/error-code.constant'
 import {
   STATIC_FILE_DIR,
   STATIC_FILE_TRASH_DIR,
@@ -137,7 +137,7 @@ export class FileService {
   async getFileStream(type: FileType, name: string) {
     const exists = await this.checkIsExist(this.resolveFilePath(type, name))
     if (!exists) {
-      throw new NotFoundException('文件不存在')
+      throw new BizException(ErrorCodeEnum.FileNotFound)
     }
     return createReadStream(this.resolveFilePath(type, name))
   }
@@ -152,7 +152,7 @@ export class FileService {
     return new Promise(async (resolve, reject) => {
       const filePath = this.resolveFilePath(type, name)
       if (await this.checkIsExist(filePath)) {
-        reject(new BadRequestException('文件已存在'))
+        reject(new BizException(ErrorCodeEnum.FileExists))
         return
       }
       await mkdir(path.dirname(filePath), { recursive: true })
@@ -200,6 +200,11 @@ export class FileService {
         await unlink(filePath)
       }
     } catch (error) {
+      if (error?.code === 'ENOENT') {
+        // 幂等：源文件不存在就视为已删除
+        this.logger.warn(`删除文件：源文件不存在，跳过 (${type}/${name})`)
+        return
+      }
       this.logger.error('删除文件失败', error)
 
       throw new InternalServerErrorException(`删除文件失败，${error.message}`)
@@ -271,7 +276,7 @@ export class FileService {
       await rename(oldPath, newPath)
     } catch (error) {
       this.logger.error('重命名文件失败', error.message)
-      throw new BadRequestException('重命名文件失败')
+      throw new BizException(ErrorCodeEnum.FileRenameFailed)
     }
   }
 }

@@ -1,18 +1,14 @@
 import type { OnModuleInit } from '@nestjs/common'
-import {
-  BadRequestException,
-  forwardRef,
-  Inject,
-  Injectable,
-  Logger,
-} from '@nestjs/common'
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
 import type { ReturnModelType } from '@typegoose/typegoose/lib/types'
 import { RequestContext } from '~/common/contexts/request.context'
+import { BizException } from '~/common/exceptions/biz.exception'
 import { CannotFindException } from '~/common/exceptions/cant-find.exception'
 import { NoContentCanBeModifiedException } from '~/common/exceptions/no-content-canbe-modified.exception'
 import { BusinessEvents, EventScope } from '~/constants/business-event.constant'
 import { CollectionRefTypes } from '~/constants/db.constant'
+import { ErrorCodeEnum } from '~/constants/error-code.constant'
 import { DatabaseService } from '~/processors/database/database.service'
 import { BarkPushService } from '~/processors/helper/helper.bark.service'
 import { EmailService } from '~/processors/helper/helper.email.service'
@@ -21,11 +17,9 @@ import type { WriteBaseModel } from '~/shared/model/write-base.model'
 import { InjectModel } from '~/transformers/model.transformer'
 import { scheduleManager } from '~/utils/schedule.util'
 import { getAvatar, hasChinese } from '~/utils/tool.util'
-import { generateObject } from 'ai'
 import ejs from 'ejs'
 import { omit, pick } from 'es-toolkit/compat'
 import { isObjectIdOrHexString, Types } from 'mongoose'
-import { z } from 'zod'
 import { AI_PROMPTS } from '../ai/ai.prompts'
 import { AiService } from '../ai/ai.service'
 import { ConfigsService } from '../configs/configs.service'
@@ -124,28 +118,21 @@ export class CommentService implements OnModuleInit {
     aiReviewType: 'binary' | 'score',
     aiReviewThreshold: number,
   ): Promise<boolean> {
-    const model = await this.aiService.getCommentReviewModel()
+    const runtime = await this.aiService.getCommentReviewModel()
 
     // 评分模式
     if (aiReviewType === 'score') {
       try {
-        const { object } = await generateObject({
-          model: model as Parameters<typeof generateObject>[0]['model'],
-          schema: z.object({
-            score: z.number().describe(AI_PROMPTS.comment.score.schema.score),
-            hasSensitiveContent: z
-              .boolean()
-              .describe(AI_PROMPTS.comment.score.schema.hasSensitiveContent),
-          }),
-          prompt: AI_PROMPTS.comment.score.prompt(text),
+        const { output } = await runtime.generateStructured({
+          ...AI_PROMPTS.comment.score(text),
         })
 
         // 如果包含敏感内容直接拒绝
-        if (object.hasSensitiveContent) {
+        if (output.hasSensitiveContent) {
           return true
         }
         // 否则根据评分判断
-        return object.score > aiReviewThreshold
+        return output.score > aiReviewThreshold
       } catch (error) {
         this.logger.error('AI 评审评分模式出错', error)
         return false
@@ -154,23 +141,16 @@ export class CommentService implements OnModuleInit {
     // 垃圾检测模式
     else {
       try {
-        const { object } = await generateObject({
-          model: model as Parameters<typeof generateObject>[0]['model'],
-          schema: z.object({
-            isSpam: z.boolean().describe(AI_PROMPTS.comment.spam.schema.isSpam),
-            hasSensitiveContent: z
-              .boolean()
-              .describe(AI_PROMPTS.comment.spam.schema.hasSensitiveContent),
-          }),
-          prompt: AI_PROMPTS.comment.spam.prompt(text),
+        const { output } = await runtime.generateStructured({
+          ...AI_PROMPTS.comment.spam(text),
         })
 
         // 如果包含敏感内容直接拒绝
-        if (object.hasSensitiveContent) {
+        if (output.hasSensitiveContent) {
           return true
         }
         // 否则按照是否 spam 判断
-        return object.isSpam
+        return output.isSpam
       } catch (error) {
         this.logger.error('AI 评审垃圾检测模式出错', error)
         return false
@@ -275,7 +255,7 @@ export class CommentService implements OnModuleInit {
       }
     }
     if (!ref) {
-      throw new BadRequestException('评论文章不存在')
+      throw new BizException(ErrorCodeEnum.CommentPostNotExists)
     }
     const commentIndex = ref.commentsIndex || 0
     doc.key = `#${commentIndex + 1}`
@@ -364,7 +344,8 @@ export class CommentService implements OnModuleInit {
       name: author,
     })
     if (isExist) {
-      throw new BadRequestException(
+      throw new BizException(
+        ErrorCodeEnum.InvalidParameter,
         '用户名与主人重名啦，但是你好像并不是我的主人唉',
       )
     }
