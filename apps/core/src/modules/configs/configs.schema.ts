@@ -33,10 +33,7 @@ const SmtpOptionsSchema = z.object({
     'SMTP 端口',
     { 'ui:options': { halfGrid: true } },
   ),
-  host: field.halfGrid(
-    z.url({ message: 'host must be a valid URL' }).optional().or(z.literal('')),
-    'SMTP 主机',
-  ),
+  host: field.halfGrid(z.string().optional().or(z.literal('')), 'SMTP 主机'),
   secure: field.toggle(z.boolean().optional(), '使用 SSL/TLS'),
 })
 
