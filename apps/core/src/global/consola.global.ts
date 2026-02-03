@@ -106,7 +106,7 @@ Object.defineProperty(process.stdout, 'write', {
   configurable: false,
 })
 Object.defineProperty(process.stderr, 'write', {
-  value: process.stdout.write,
+  value: process.stderr.write,
   writable: false,
   configurable: false,
 })
