@@ -1,7 +1,15 @@
 import { createLogger, Logger } from '@innei/pretty-logger-nestjs'
+import { LOG_DIR } from '~/constants/path.constant'
 import { isTest } from './env.global'
 
-const logger = createLogger()
+const logger = createLogger({
+  writeToFile: !isTest
+    ? {
+        loggerDir: LOG_DIR,
+        errWriteToStdout: true,
+      }
+    : undefined,
+})
 Logger.setLoggerInstance(logger)
 if (!isTest) {
   try {
@@ -9,6 +17,11 @@ if (!isTest) {
   } catch {
     logger.warn('wrap console failed')
   }
+  logger.onData((data) => {
+    import('../utils/redis-subpub.util').then(({ redisSubPub }) => {
+      redisSubPub.publish('log', data)
+    })
+  })
 }
 
 // HACK: forhidden pm2 to override this method

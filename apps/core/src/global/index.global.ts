@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { CLUSTER } from '~/app.config'
 import {
   DATA_DIR,
+  LOG_DIR,
   STATIC_FILE_DIR,
   STATIC_FILE_TRASH_DIR,
   TEMP_DIR,
@@ -21,6 +22,8 @@ function createAppFolders() {
     globalLogger.log(pc.blue(`数据目录已经建好：${DATA_DIR}`))
     mkdirSync(TEMP_DIR, { recursive: true })
     globalLogger.log(pc.blue(`临时目录已经建好：${TEMP_DIR}`))
+    mkdirSync(LOG_DIR, { recursive: true })
+    globalLogger.log(pc.blue(`日志目录已经建好：${LOG_DIR}`))
     mkdirSync(USER_ASSET_DIR, { recursive: true })
     globalLogger.log(pc.blue(`资源目录已经建好：${USER_ASSET_DIR}`))
     mkdirSync(STATIC_FILE_DIR, { recursive: true })
