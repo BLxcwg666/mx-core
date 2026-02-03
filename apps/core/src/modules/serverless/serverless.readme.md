@@ -133,6 +133,9 @@ const remoteModule =
 - `fetch` - Fetch API
 - `console` - Modified Console API
 - `logger` - Equal `console`
+- `isIPv4(ip)` - Check if IP is IPv4 format
+- `isIPv6(ip)` - Check if IP is IPv6 format
+- `isIP(ip)` - Returns 4/6/0 for IPv4/IPv6/invalid
 
 And other global api is all banned.
 

@@ -12,6 +12,7 @@ const { parentPort, workerData } = require('node:worker_threads');
 const vm = require('node:vm');
 const { webcrypto } = require('node:crypto');
 const { performance, PerformanceObserver } = require('node:perf_hooks');
+const { isIPv4, isIPv6, isIP } = require('node:net');
 
 const WorkerMessageType = {
   Execute: 'execute',
@@ -429,6 +430,11 @@ async function executeCode(payload) {
       isNaN: globalThis.isNaN,
       parseFloat: globalThis.parseFloat,
       parseInt: globalThis.parseInt,
+
+      // ===== Network Utilities (safe functions from net module) =====
+      isIPv4: isIPv4,
+      isIPv6: isIPv6,
+      isIP: isIP,
 
       // ===== Constants =====
       Infinity: globalThis.Infinity,
