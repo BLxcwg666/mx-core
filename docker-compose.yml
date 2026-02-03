@@ -2,10 +2,14 @@ services:
   app:
     container_name: mx-server
     image: blxcwg666/mx-server:latest
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - TZ=Asia/Shanghai
       - NODE_ENV=production
       - DB_HOST=mongo
+      - CLUSTER=true
+      - CLUSTER_WORKERS=8
       - REDIS_HOST=redis
       - MEILI_HOST=meilisearch
       - MEILI_MASTER_KEY=YOUR_SUPER_SECURED_MEILI_MASTER_KEY

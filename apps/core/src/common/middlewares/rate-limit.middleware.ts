@@ -1,52 +1,47 @@
 import type { ServerResponse } from 'node:http'
 import type { NestMiddleware } from '@nestjs/common'
 import { Injectable } from '@nestjs/common'
+import { RedisService } from '~/processors/redis/redis.service'
 import type { BizIncomingMessage } from '~/transformers/get-req.transformer'
 import { getIp } from '~/utils/ip.util'
 
 @Injectable()
 export class RateLimitMiddleware implements NestMiddleware {
-  private requests = new Map<string, { count: number; resetAt: number }>()
   private readonly limit = 50
-  private readonly window = 1000
+  private readonly windowMs = 1000
 
-  private cleanupCounter = 0
+  constructor(private readonly redisService: RedisService) {}
 
-  use(req: BizIncomingMessage, res: ServerResponse, next: () => void) {
+  async use(req: BizIncomingMessage, res: ServerResponse, next: () => void) {
     const ip = getIp(req)
     if (!ip) {
       return next()
     }
 
     const now = Date.now()
-    const record = this.requests.get(ip)
+    const windowKey = Math.floor(now / this.windowMs)
+    const key = `rate_limit:${ip}:${windowKey}`
 
-    if (!record || now > record.resetAt) {
-      this.requests.set(ip, { count: 1, resetAt: now + this.window })
-      this.maybeCleanup(now)
-      return next()
-    }
+    try {
+      const redis = this.redisService.getClient()
+      const count = await redis.incr(key)
 
-    if (record.count >= this.limit) {
-      res.statusCode = 429
-      res.setHeader('Retry-After', '1')
-      res.end('Too Many Requests')
-      return
-    }
-
-    record.count++
-    next()
-  }
-
-  private maybeCleanup(now: number) {
-    this.cleanupCounter++
-    if (this.cleanupCounter < 1000) return
-    this.cleanupCounter = 0
-
-    for (const [key, value] of this.requests) {
-      if (now > value.resetAt) {
-        this.requests.delete(key)
+      if (count === 1) {
+        // First request in this window, set expiry
+        await redis.pexpire(key, this.windowMs + 1000) // +1s buffer for cleanup
       }
+
+      if (count > this.limit) {
+        res.statusCode = 429
+        res.setHeader('Retry-After', '1')
+        res.end('Too Many Requests')
+        return
+      }
+
+      next()
+    } catch {
+      // Redis error, allow request through
+      next()
     }
   }
 }
