@@ -2,6 +2,11 @@ import { createLogger, Logger } from '@innei/pretty-logger-nestjs'
 import { LOG_DIR } from '~/constants/path.constant'
 import { isTest } from './env.global'
 
+// Force enable colors for pretty-logger
+if (!process.env.NO_COLOR) {
+  process.env.FORCE_COLOR = '1'
+}
+
 const logger = createLogger({
   writeToFile: !isTest
     ? {
@@ -9,6 +14,10 @@ const logger = createLogger({
         errWriteToStdout: true,
       }
     : undefined,
+  formatOptions: {
+    date: true,
+    colors: true,
+  },
 })
 Logger.setLoggerInstance(logger)
 if (!isTest) {
