@@ -15,10 +15,25 @@ export class RequestContext {
   response: ServerResponse
   lang?: string
 
+  private cache = new Map<string, any>()
+
   constructor(request: BizIncomingMessage, response: ServerResponse) {
     this.id = Math.random()
     this.request = request
     this.response = response
+  }
+
+  static setCache<T>(key: string, value: T): void {
+    const ctx = RequestContext.currentRequestContext()
+    ctx?.cache.set(key, value)
+  }
+
+  static getCache<T>(key: string): T | undefined {
+    return RequestContext.currentRequestContext()?.cache.get(key)
+  }
+
+  static hasCache(key: string): boolean {
+    return RequestContext.currentRequestContext()?.cache.has(key) ?? false
   }
 
   static run<T>(requestContext: RequestContext, callback: () => T): T {

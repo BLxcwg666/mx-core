@@ -17,6 +17,7 @@ import { DbQueryInterceptor } from './common/interceptors/db-query.interceptor'
 import { IdempotenceInterceptor } from './common/interceptors/idempotence.interceptor'
 import { JSONTransformInterceptor } from './common/interceptors/json-transform.interceptor'
 import { ResponseInterceptor } from './common/interceptors/response.interceptor'
+import { RateLimitMiddleware } from './common/middlewares/rate-limit.middleware'
 import { RequestContextMiddleware } from './common/middlewares/request-context.middleware'
 import { AckModule } from './modules/ack/ack.module'
 import { ActivityModule } from './modules/activity/activity.module'
@@ -179,6 +180,7 @@ export class AppModule implements NestModule {
     }
   }
   configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RateLimitMiddleware).forRoutes('*app')
     consumer.apply(RequestContextMiddleware).forRoutes('*app')
   }
 }

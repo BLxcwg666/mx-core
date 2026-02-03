@@ -130,6 +130,19 @@ export class AuthService {
   }
 
   async getSessionUser(req: IncomingMessage) {
+    const cacheKey = 'session_user'
+    if (RequestContext.hasCache(cacheKey)) {
+      return RequestContext.getCache<
+        Awaited<ReturnType<typeof this.getSessionUser>>
+      >(cacheKey)!
+    }
+
+    const result = await this._getSessionUserImpl(req)
+    RequestContext.setCache(cacheKey, result)
+    return result
+  }
+
+  private async _getSessionUserImpl(req: IncomingMessage) {
     const auth = this.authInstance.get()
     if (!auth) {
       throw new InternalServerErrorException('auth not found')

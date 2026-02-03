@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import type { ReturnModelType } from '@typegoose/typegoose'
+import { RequestContext } from '~/common/contexts/request.context'
 import {
   BizException,
   BusinessException,
@@ -53,10 +54,18 @@ export class UserService {
   }
 
   public async getMaster() {
+    const cacheKey = 'master_user'
+    const cached = RequestContext.getCache<UserModel>(cacheKey)
+    if (cached) {
+      return cached
+    }
+
     const master = await this.userModel.findOne().lean()
     if (!master) {
       throw new BizException(ErrorCodeEnum.UserNotExists)
     }
+
+    RequestContext.setCache(cacheKey, master)
     return master
   }
 
