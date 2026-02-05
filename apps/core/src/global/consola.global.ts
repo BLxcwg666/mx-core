@@ -41,12 +41,21 @@ const getWorkerPrefix = () => {
   return pc.yellow(`[W${cluster.worker!.id}]`)
 }
 
+// Cache wrapped methods to preserve .raw and other properties
+const wrappedMethods = new Map<string, Function>()
+
 const logger = new Proxy(originalLogger, {
   get(target, prop, receiver) {
     const original = Reflect.get(target, prop, receiver)
 
     if (typeof original === 'function' && logMethods.has(prop as string)) {
-      return (...args: unknown[]) => {
+      // Return cached wrapper if exists
+      if (wrappedMethods.has(prop as string)) {
+        return wrappedMethods.get(prop as string)
+      }
+
+      // Create wrapper function
+      const wrapper = (...args: unknown[]) => {
         if (isBootstrapPhase() && cluster.isWorker) {
           return
         }
@@ -56,6 +65,19 @@ const logger = new Proxy(originalLogger, {
         }
         return (original as Function).apply(target, args)
       }
+
+      // Copy all properties from original function (including .raw)
+      Object.keys(original).forEach((key) => {
+        ;(wrapper as any)[key] = (original as any)[key]
+      })
+
+      // Also copy .raw if it exists (consola methods have .raw)
+      if ('raw' in original) {
+        ;(wrapper as any).raw = (original as any).raw
+      }
+
+      wrappedMethods.set(prop as string, wrapper)
+      return wrapper
     }
 
     return original
