@@ -9,7 +9,7 @@ if (!process.env.NO_COLOR) {
   process.env.FORCE_COLOR = '1'
 }
 
-const originalLogger = createLogger({
+const logger = createLogger({
   writeToFile: !isTest
     ? {
         loggerDir: LOG_DIR,
@@ -22,7 +22,7 @@ const originalLogger = createLogger({
   },
 })
 
-const logMethods = new Set([
+const logMethods = [
   'log',
   'info',
   'warn',
@@ -34,55 +34,42 @@ const logMethods = new Set([
   'ready',
   'start',
   'box',
-])
+] as const
 
 const getWorkerPrefix = () => {
   if (!cluster.isWorker) return null
   return pc.yellow(`[W${cluster.worker!.id}]`)
 }
 
-// Cache wrapped methods to preserve .raw and other properties
-const wrappedMethods = new Map<string, Function>()
+// Wrap logger methods directly to support filtering during bootstrap
+// This ensures wrapAll() also uses our filtered methods
+for (const method of logMethods) {
+  const original = (logger as any)[method]
+  if (typeof original !== 'function') continue
 
-const logger = new Proxy(originalLogger, {
-  get(target, prop, receiver) {
-    const original = Reflect.get(target, prop, receiver)
-
-    if (typeof original === 'function' && logMethods.has(prop as string)) {
-      // Return cached wrapper if exists
-      if (wrappedMethods.has(prop as string)) {
-        return wrappedMethods.get(prop as string)
-      }
-
-      // Create wrapper function
-      const wrapper = (...args: unknown[]) => {
-        if (isBootstrapPhase() && cluster.isWorker) {
-          return
-        }
-        const workerPrefix = getWorkerPrefix()
-        if (workerPrefix && !isBootstrapPhase()) {
-          return (original as Function).apply(target, [workerPrefix, ...args])
-        }
-        return (original as Function).apply(target, args)
-      }
-
-      // Copy all properties from original function (including .raw)
-      Object.keys(original).forEach((key) => {
-        ;(wrapper as any)[key] = (original as any)[key]
-      })
-
-      // Also copy .raw if it exists (consola methods have .raw)
-      if ('raw' in original) {
-        ;(wrapper as any).raw = (original as any).raw
-      }
-
-      wrappedMethods.set(prop as string, wrapper)
-      return wrapper
+  const wrapped = (...args: unknown[]) => {
+    // During bootstrap, only master process outputs logs
+    if (isBootstrapPhase() && cluster.isWorker) {
+      return
     }
+    // After bootstrap, add worker prefix for worker processes
+    const workerPrefix = getWorkerPrefix()
+    if (workerPrefix && !isBootstrapPhase()) {
+      return original.call(logger, workerPrefix, ...args)
+    }
+    return original.call(logger, ...args)
+  }
 
-    return original
-  },
-}) as typeof originalLogger
+  // Copy all properties from original function (including .raw)
+  for (const key of Object.keys(original)) {
+    ;(wrapped as any)[key] = (original as any)[key]
+  }
+  if ('raw' in original) {
+    ;(wrapped as any).raw = (original as any).raw
+  }
+
+  ;(logger as any)[method] = wrapped
+}
 
 Logger.setLoggerInstance(logger)
 

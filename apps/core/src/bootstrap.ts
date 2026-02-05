@@ -30,12 +30,14 @@ const Origin: false | string[] = Array.isArray(CROSS_DOMAIN.allowedOrigins)
 export async function bootstrap() {
   const isInit = await checkInit()
 
+  // In worker process, disable NestJS startup logs to avoid N duplicates
+  // After bootstrap, useLogger() will enable runtime logging
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule.register(isInit),
     fastifyApp,
+    { logger: cluster.isWorker ? false : undefined },
   )
 
-  // 使用自定义 Logger 替换 NestJS 内置 Logger
   app.useLogger(app.get(Logger))
 
   const allowAllCors: FastifyCorsOptions = {
