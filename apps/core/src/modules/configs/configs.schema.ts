@@ -24,27 +24,21 @@ export class UrlDto extends createZodDto(UrlSchema) {}
 export type UrlConfig = z.infer<typeof UrlSchema>
 
 // ==================== Mail Options ====================
-const SmtpOptionsSchema = z.object({
-  port: field.number(
-    z.preprocess(
-      (val) => (val ? Number(val) : val),
-      z.number().int().optional(),
-    ),
-    'SMTP 端口',
-    { 'ui:options': { halfGrid: true } },
-  ),
-  host: field.halfGrid(z.string().optional().or(z.literal('')), 'SMTP 主机'),
-  secure: field.toggle(z.boolean().optional(), '使用 SSL/TLS'),
-})
-
 const SmtpConfigSchema = withMeta(
   z
     .object({
       user: field.halfGrid(z.string().optional(), 'SMTP 用户名'),
       pass: field.passwordHalfGrid(z.string().min(1).optional(), 'SMTP 密码'),
-      options: withMeta(SmtpOptionsSchema.optional(), {
-        'ui:options': { connect: true },
-      }),
+      host: field.halfGrid(z.string().optional(), 'SMTP 主机'),
+      port: field.number(
+        z.preprocess(
+          (val) => (val ? Number(val) : val),
+          z.number().int().optional(),
+        ),
+        'SMTP 端口',
+        { 'ui:options': { halfGrid: true } },
+      ),
+      secure: field.toggle(z.boolean().optional(), '使用 SSL/TLS'),
     })
     .optional(),
   {
@@ -101,6 +95,11 @@ export const CommentOptionsSchema = section('评论设置', {
     'AI 审核阈值',
     { description: '分数大于多少时会被归类为垃圾评论，范围为 1-10, 默认为 5' },
   ),
+  testAiReview: field.action('测试 AI 审核', 'test-ai-review', {
+    description: '输入测试内容，验证 AI 审核功能是否正常工作',
+    actionLabel: '测试',
+    showWhen: { aiReview: 'true' },
+  }),
   disableComment: field.toggle(z.boolean().optional(), '全站禁止评论', {
     description: '敏感时期专用',
   }),

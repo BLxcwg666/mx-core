@@ -2,9 +2,6 @@ import { statSync } from 'node:fs'
 import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common'
-import { CronExpression } from '@nestjs/schedule'
-import { CronDescription } from '~/common/decorators/cron-description.decorator'
-import { CronOnce } from '~/common/decorators/cron-once.decorator'
 import { RedisKeys } from '~/constants/cache.constant'
 import {
   LOG_DIR,
@@ -15,17 +12,23 @@ import { AggregateService } from '~/modules/aggregate/aggregate.service'
 import { AnalyzeModel } from '~/modules/analyze/analyze.model'
 import { ConfigsService } from '~/modules/configs/configs.service'
 import { FileReferenceService } from '~/modules/file/file-reference.service'
+import { HttpService } from '~/processors/helper/helper.http.service'
+import type { StoreJWTPayload } from '~/processors/helper/helper.jwt.service'
+import { JWTService } from '~/processors/helper/helper.jwt.service'
+import { RedisService } from '~/processors/redis/redis.service'
 import { InjectModel } from '~/transformers/model.transformer'
 import { getRedisKey } from '~/utils/redis.util'
 import dayjs from 'dayjs'
 import { mkdirp } from 'mkdirp'
-import { RedisService } from '../redis/redis.service'
-import { HttpService } from './helper.http.service'
-import type { StoreJWTPayload } from './helper.jwt.service'
-import { JWTService } from './helper.jwt.service'
 
+/**
+ * CronBusinessService - Cron 任务业务逻辑层
+ *
+ * 本服务仅保留业务方法的实现，供 CronTaskService 调用
+ * 调度逻辑在 CronTaskScheduler 中
+ */
 @Injectable()
-export class CronService {
+export class CronBusinessService {
   private logger: Logger
   constructor(
     private readonly http: HttpService,
@@ -38,42 +41,38 @@ export class CronService {
     @Inject(forwardRef(() => AggregateService))
     private readonly aggregateService: AggregateService,
   ) {
-    this.logger = new Logger(CronService.name)
+    this.logger = new Logger(CronBusinessService.name)
   }
 
-  @CronOnce(CronExpression.EVERY_1ST_DAY_OF_MONTH_AT_MIDNIGHT, {
-    name: 'cleanAccessRecord',
-  })
-  @CronDescription('清理访问记录')
+  /**
+   * 清理 7 天前的访问记录
+   */
   async cleanAccessRecord() {
     const cleanDate = dayjs().add(-7, 'd')
 
-    await this.analyzeModel.deleteMany({
+    const result = await this.analyzeModel.deleteMany({
       timestamp: {
         $lte: cleanDate.toDate(),
       },
     })
 
     this.logger.log('--> 清理访问记录成功')
+    return { deletedCount: result.deletedCount }
   }
+
   /**
-   * @description 每天凌晨删除缓存
+   * 每天凌晨删除 IP 访问缓存
    */
-  @CronOnce(CronExpression.EVERY_DAY_AT_MIDNIGHT, { name: 'resetIPAccess' })
-  @CronDescription('清理 IP 访问记录')
   async resetIPAccess() {
     await this.redisService.getClient().del(getRedisKey(RedisKeys.AccessIp))
 
     this.logger.log('--> 清理 IP 访问记录成功')
+    return { success: true }
   }
 
   /**
-   * @description 每天凌晨删除缓存
+   * 每天凌晨删除喜欢/阅读记录缓存
    */
-  @CronOnce(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
-    name: 'resetLikedOrReadArticleRecord',
-  })
-  @CronDescription('清理喜欢数')
   async resetLikedOrReadArticleRecord() {
     const redis = this.redisService.getClient()
 
@@ -87,19 +86,22 @@ export class CronService {
     )
 
     this.logger.log('--> 清理喜欢数成功')
+    return { success: true }
   }
 
-  @CronOnce(CronExpression.EVERY_DAY_AT_3AM, { name: 'cleanTempDirectory' })
-  @CronDescription('清理临时文件')
+  /**
+   * 清理临时文件目录
+   */
   async cleanTempDirectory() {
     await rm(TEMP_DIR, { recursive: true })
     mkdirp.sync(STATIC_FILE_TRASH_DIR)
     this.logger.log('--> 清理临时文件成功')
+    return { success: true }
   }
 
-  // "At 00:05."
-  @CronOnce('5 0 * * *', { name: 'cleanLogFile' })
-  @CronDescription('清理日志文件')
+  /**
+   * 清理 7 天前的日志文件
+   */
   async cleanLogFile() {
     const files = (await readdir(LOG_DIR)).filter(
       (file) => file !== 'error.log',
@@ -116,10 +118,12 @@ export class CronService {
 
     await Promise.all(rmTaskArr)
     this.logger.log('--> 清理日志文件成功')
+    return { success: true }
   }
 
-  @CronOnce(CronExpression.EVERY_DAY_AT_1AM, { name: 'pushToBaiduSearch' })
-  @CronDescription('推送到百度搜索')
+  /**
+   * 推送站点地图到百度搜索
+   */
   async pushToBaiduSearch() {
     const {
       url: { webUrl },
@@ -130,7 +134,7 @@ export class CronService {
       const token = configs.token
       if (!token) {
         this.logger.error('[BaiduSearchPushTask] token 为空')
-        return
+        return { skipped: true, reason: 'token is empty' }
       }
 
       const pushUrls = await this.aggregateService.getSiteMapContent()
@@ -151,17 +155,18 @@ export class CronService {
           },
         )
         this.logger.log(`百度站长提交结果：${JSON.stringify(res.data)}`)
-        return res.data
+        return { response: res.data }
       } catch (error) {
         this.logger.error(`百度推送错误：${error.message}`)
         throw error
       }
     }
-    return null
+    return { skipped: true, reason: 'Baidu search push is disabled' }
   }
 
-  @CronOnce(CronExpression.EVERY_DAY_AT_1AM, { name: 'pushToBingSearch' })
-  @CronDescription('推送到 Bing')
+  /**
+   * 推送站点地图到 Bing 搜索
+   */
   async pushToBingSearch() {
     const {
       url: { webUrl },
@@ -169,12 +174,12 @@ export class CronService {
     } = await this.configs.waitForConfigReady()
 
     if (!configs.enable) {
-      return
+      return { skipped: true, reason: 'Bing search push is disabled' }
     }
     const apiKey = configs.token
     if (!apiKey) {
       this.logger.error('[BingSearchPushTask] API key 为空')
-      return
+      return { skipped: true, reason: 'API key is empty' }
     }
 
     const pushUrls = await this.aggregateService.getSiteMapContent()
@@ -199,17 +204,16 @@ export class CronService {
       } else {
         this.logger.log(`Bing 站长提交结果：${JSON.stringify(res.data)}`)
       }
-      return res.data
+      return { response: res.data }
     } catch (error) {
       this.logger.error(`Bing 推送错误：${error.message}`)
+      throw error
     }
-    return null
   }
 
-  @CronDescription('扫表：删除过期 JWT')
-  @CronOnce(CronExpression.EVERY_DAY_AT_1AM, {
-    name: 'deleteExpiredJWT',
-  })
+  /**
+   * 扫表删除过期的 JWT
+   */
   async deleteExpiredJWT() {
     this.logger.log('--> 开始扫表，清除过期的 token')
     const redis = this.redisService.getClient()
@@ -245,12 +249,12 @@ export class CronService {
     )
 
     this.logger.log(`--> 删除了 ${deleteCount} 个过期的 token`)
+    return { deletedCount: deleteCount }
   }
 
-  @CronDescription('清理孤儿图片')
-  @CronOnce(CronExpression.EVERY_HOUR, {
-    name: 'cleanupOrphanImages',
-  })
+  /**
+   * 清理孤儿图片
+   */
   async cleanupOrphanImages() {
     this.logger.log('--> 开始清理孤儿图片')
     const { deletedCount, totalOrphan } =
@@ -258,5 +262,6 @@ export class CronService {
     this.logger.log(
       `--> 清理孤儿图片完成：删除了 ${deletedCount}/${totalOrphan} 个文件`,
     )
+    return { deletedCount, totalOrphan }
   }
 }

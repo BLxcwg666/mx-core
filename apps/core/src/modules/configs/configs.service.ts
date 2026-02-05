@@ -16,7 +16,11 @@ import { camelcaseKeys, sleep } from '~/utils/tool.util'
 import { cloneDeep, merge, mergeWith } from 'es-toolkit/compat'
 import type { z, ZodError } from 'zod'
 import { generateDefaultConfig } from './configs.default'
-import { decryptObject, encryptObject } from './configs.encrypt.util'
+import {
+  decryptObject,
+  encryptObject,
+  removeEmptyEncryptedFields,
+} from './configs.encrypt.util'
 import { configDtoMapping, IConfig } from './configs.interface'
 import { OptionModel } from './configs.model'
 import type { OAuthConfig } from './configs.schema'
@@ -203,6 +207,9 @@ export class ConfigsService {
     value: Partial<IConfig[T]>,
   ) {
     value = camelcaseKeys(value) as any
+    value = removeEmptyEncryptedFields(value as object, key) as Partial<
+      IConfig[T]
+    >
 
     if (key === 'ai') {
       value = await this.hydrateAiProviderApiKeys(value as any)
