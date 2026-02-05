@@ -14,7 +14,12 @@ import { SpiderGuard } from './common/guards/spider.guard'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
 import { extendedZodValidationPipeInstance } from './common/zod'
 import { logger } from './global/consola.global'
-import { isDev, isMainProcess, isTest } from './global/env.global'
+import {
+  isDev,
+  isMainProcess,
+  isTest,
+  markBootstrapComplete,
+} from './global/env.global'
 import { checkInit } from './utils/check-init.util'
 import { sendTelemetry, startHeartbeat } from './utils/telemetry.util'
 
@@ -82,6 +87,8 @@ export async function bootstrap() {
       port: +PORT,
     },
     async () => {
+      markBootstrapComplete()
+
       logger.info('ENV:', process.env.NODE_ENV)
       const url = await app.getUrl()
       const pid = process.pid

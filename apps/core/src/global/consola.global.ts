@@ -1,13 +1,15 @@
+import cluster from 'node:cluster'
 import { createLogger, Logger } from '@innei/pretty-logger-nestjs'
 import { LOG_DIR } from '~/constants/path.constant'
-import { isTest } from './env.global'
+import pc from 'picocolors'
+import { isBootstrapPhase, isTest } from './env.global'
 
 // Force enable colors for pretty-logger
 if (!process.env.NO_COLOR) {
   process.env.FORCE_COLOR = '1'
 }
 
-const logger = createLogger({
+const originalLogger = createLogger({
   writeToFile: !isTest
     ? {
         loggerDir: LOG_DIR,
@@ -19,7 +21,49 @@ const logger = createLogger({
     colors: true,
   },
 })
+
+const logMethods = new Set([
+  'log',
+  'info',
+  'warn',
+  'error',
+  'debug',
+  'verbose',
+  'fatal',
+  'success',
+  'ready',
+  'start',
+  'box',
+])
+
+const getWorkerPrefix = () => {
+  if (!cluster.isWorker) return null
+  return pc.yellow(`[W${cluster.worker!.id}]`)
+}
+
+const logger = new Proxy(originalLogger, {
+  get(target, prop, receiver) {
+    const original = Reflect.get(target, prop, receiver)
+
+    if (typeof original === 'function' && logMethods.has(prop as string)) {
+      return (...args: unknown[]) => {
+        if (isBootstrapPhase() && cluster.isWorker) {
+          return
+        }
+        const workerPrefix = getWorkerPrefix()
+        if (workerPrefix && !isBootstrapPhase()) {
+          return (original as Function).apply(target, [workerPrefix, ...args])
+        }
+        return (original as Function).apply(target, args)
+      }
+    }
+
+    return original
+  },
+}) as typeof originalLogger
+
 Logger.setLoggerInstance(logger)
+
 if (!isTest) {
   try {
     logger.wrapAll()
